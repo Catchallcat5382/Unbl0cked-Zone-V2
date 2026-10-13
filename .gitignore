@@ -1,0 +1,7 @@
+MONGODB.txt
+server/.env
+server/**/*.env
+server/**/node_modules/
+node_modules/
+.env
+*.env
