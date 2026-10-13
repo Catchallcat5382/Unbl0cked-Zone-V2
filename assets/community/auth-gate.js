@@ -647,22 +647,16 @@
       renderGate('This account was deleted. Create a new account to continue.');
       return null;
     }
-    if (!doc.exists && !allowCreate) {
-      clearAccountLocalState(username);
-      try {
-        await deleteFirebaseAuthUser(user, cleanupPassword);
-        debugLog('orphan-auth-deleted', username);
-      } catch (orphanError) {
-        debugLog('orphan-auth-delete-failed', orphanError.message || 'unknown');
-      }
-      try { await client.auth.signOut(); } catch (signOutError) {}
-      renderGate('This account no longer has an active profile and cannot be signed in. Create a new account to continue.');
-      return null;
-    }
     if (!doc.exists) {
+      // Firebase Auth is the source of truth for whether the account exists.
+      // If the profile document is missing, repair it instead of deleting the
+      // Auth user or telling the user the account does not exist.
+      debugLog(allowCreate ? 'firebase-profile-create' : 'firebase-profile-repair', username);
       var role = 'member';
-      await ref.set({ id: user.uid, username: username, display_name: username, role: role, warnings: 0, email: user.email || '', created_at: new Date().toISOString(), last_seen: new Date().toISOString() });
+      await ref.set({ id: user.uid, username: username, display_name: username, role: role, warnings: 0, email: user.email || '', created_at: new Date().toISOString(), last_seen: new Date().toISOString() }, { merge: true });
       doc = await ref.get();
+    } else {
+      try { await ref.set({ username: username, email: user.email || '', last_seen: new Date().toISOString() }, { merge: true }); } catch (seenError) { debugLog('firebase-profile-touch-failed', seenError.message || 'unknown'); }
     }
     var data = doc.data() || {};
     data.id = user.uid;

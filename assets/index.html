@@ -1966,7 +1966,8 @@
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);pointer-events:none;" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </div>
           <div class="media-categories">
-            <button class="media-cat active" data-media="tv"> TV Shows</button>            <button class="media-cat" data-media="manga"> Manga</button>
+            <button class="media-cat active" data-media="tv"> TV Shows</button>
+            <button class="media-cat" data-media="manga"> Manga</button>
             <button class="media-cat" data-media="music"> Music</button>
           </div>
           <div class="card-grid">
@@ -2194,7 +2195,8 @@
         </div>
         <div class="media-section" id="media-music" style="display:none">
           <div class="media-categories">
-            <button class="media-cat active" data-media="tv"> TV Shows</button>            <button class="media-cat" data-media="manga"> Manga</button>
+            <button class="media-cat active" data-media="tv"> TV Shows</button>
+            <button class="media-cat" data-media="manga"> Manga</button>
             <button class="media-cat" data-media="music"> Music</button>
           </div>
           <div class="music-tabbar">
@@ -2214,7 +2216,8 @@
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);pointer-events:none;" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </div>
           <div class="media-categories">
-            <button class="media-cat active" data-media="tv"> TV Shows</button>            <button class="media-cat" data-media="manga"> Manga</button>
+            <button class="media-cat active" data-media="tv"> TV Shows</button>
+            <button class="media-cat" data-media="manga"> Manga</button>
             <button class="media-cat" data-media="music"> Music</button>
           </div>
           <div class="card-grid">
@@ -11552,22 +11555,16 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:' + window.UZ_COMMUNITY_CONFIG.mongo
       renderGate('This account was deleted. Create a new account to continue.');
       return null;
     }
-    if (!doc.exists && !allowCreate) {
-      clearAccountLocalState(username);
-      try {
-        await deleteFirebaseAuthUser(user, cleanupPassword);
-        debugLog('orphan-auth-deleted', username);
-      } catch (orphanError) {
-        debugLog('orphan-auth-delete-failed', orphanError.message || 'unknown');
-      }
-      try { await client.auth.signOut(); } catch (signOutError) {}
-      renderGate('This account no longer has an active profile and cannot be signed in. Create a new account to continue.');
-      return null;
-    }
     if (!doc.exists) {
+      // Firebase Auth is the source of truth for whether the account exists.
+      // If the profile document is missing, repair it instead of deleting the
+      // Auth user or telling the user the account does not exist.
+      debugLog(allowCreate ? 'firebase-profile-create' : 'firebase-profile-repair', username);
       var role = 'member';
-      await ref.set({ id: user.uid, username: username, display_name: username, role: role, warnings: 0, email: user.email || '', created_at: new Date().toISOString(), last_seen: new Date().toISOString() });
+      await ref.set({ id: user.uid, username: username, display_name: username, role: role, warnings: 0, email: user.email || '', created_at: new Date().toISOString(), last_seen: new Date().toISOString() }, { merge: true });
       doc = await ref.get();
+    } else {
+      try { await ref.set({ username: username, email: user.email || '', last_seen: new Date().toISOString() }, { merge: true }); } catch (seenError) { debugLog('firebase-profile-touch-failed', seenError.message || 'unknown'); }
     }
     var data = doc.data() || {};
     data.id = user.uid;
