@@ -3,16 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title></title>
+  <title>Unbl0cked Zone Loader</title>
   <style>
-    html,body{margin:0;min-height:100%;background:#000}
+    html,body{margin:0;min-height:100%;background:#100703;color:#ff7a1a;font-family:Arial,sans-serif}
+    body{display:grid;place-items:center}
+    main{max-width:560px;padding:28px;border:1px solid #ff6a00;border-radius:14px;background:#080506;box-shadow:0 0 36px rgba(255,106,0,.22)}
+    h1{margin:0 0 10px;font-size:24px}p{line-height:1.45;color:#ffd2a0}.err{color:#ffb4a8;white-space:pre-wrap}button{background:#ff7a1a;color:#160600;border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer}
   </style>
 </head>
-<body aria-busy="true">
+<body>
+  <main id="loader">
+    <h1>Loading Unbl0cked Zone</h1>
+    <p>Opening the hosted live build. This single file works without an assets folder.</p>
+  </main>
   <script>
     (async function () {
       function dec(parts) { return parts.map(function(p){ return atob(p); }).join(''); }
-      var buildRevision = 'master';
+      var buildRevision = 'main';
       var buildVersion = 'live-' + buildRevision + '-' + Date.now();
       var rawBaseUrl = 'https://raw.githubusercontent.com/Catchallcat5382/Unbl0cked-Zone-V2/main/assets/';
       var pageUrl = rawBaseUrl + 'index.html';
@@ -23,6 +30,7 @@
         'https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@' + buildRevision + '/assets/'
       ];
       var baseUrl = rawBaseUrl;
+      var loader = document.getElementById('loader');
       try {
         var cacheKey = '?v=' + buildVersion;
         var res = await fetch(pageUrl + cacheKey, { cache: 'no-store' });
@@ -32,6 +40,7 @@
         }
         if (!res.ok) throw new Error('Live build returned HTTP ' + res.status);
         var html = await res.text();
+        html = html.replace(/<head([^>]*)>/i, '<head$1><script>(function(){var u=localStorage.getItem("uzMongoApiUrl")||"https://unblocked-zone.onrender.com";u=String(u).replace(/\\/+$/,"").replace("onrendered.com","onrender.com").replace("https://zone.onrender.com","https://unblocked-zone.onrender.com");if(u.indexOf("https://bullbestyoutuber.s3.us-east-1.amazonaws.com/index.html")===0)u="https://unblocked-zone.onrender.com";if(localStorage.getItem("uzMongoApiUrl")&&localStorage.getItem("uzMongoApiUrl")!==u)localStorage.setItem("uzMongoApiUrl",u);window.UZ_MONGO_API_URL=u;}());<\/script>');
         try {
             var cssRes = await fetch(baseUrl + 'community/community.css' + cacheKey, { cache: 'no-store' });
           if (cssRes.ok) {
@@ -41,13 +50,12 @@
           }
         } catch (cssErr) {}
         for (var j = 0; j < scriptFiles.length; j++) {
-          var srcPattern = new RegExp('<script\\s+src=["\\\']' + scriptFiles[j].replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('/', '\\/') + '["\\\']\\s*><\\/script>', 'i');
-          if (!srcPattern.test(html)) continue;
           try {
             var scriptUrl = baseUrl + scriptFiles[j];
             var scriptRes = await fetch(scriptUrl + cacheKey, { cache: 'no-store' });
             if (!scriptRes.ok) throw new Error(scriptFiles[j] + ' returned HTTP ' + scriptRes.status);
             var js = await scriptRes.text();
+            var srcPattern = new RegExp('<script\\s+src=["\\\']' + scriptFiles[j].replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('/', '\\/') + '["\\\']\\s*><\\/script>', 'i');
             html = html.replace(srcPattern, '<script data-inline="' + scriptFiles[j] + '">' + js.replace(/<\/script/gi, '<\\/script') + '<\\/script>');
           } catch (scriptErr) {
             throw new Error('Could not load ' + scriptFiles[j] + ': ' + (scriptErr && scriptErr.message ? scriptErr.message : scriptErr));
@@ -59,8 +67,9 @@
         document.write(html);
         document.close();
       } catch (err) {
-        document.body.replaceChildren();
-        document.body.removeAttribute('aria-busy'); document.body.style.color = '#fff'; document.body.style.font = '16px Arial, sans-serif'; document.body.style.display = 'grid'; document.body.style.placeItems = 'center'; document.body.textContent = 'Could not load the live site. Try refreshing.';
+        var shownApi = String(localStorage.getItem("uzMongoApiUrl")||"https://unblocked-zone.onrender.com").replace("onrendered.com","onrender.com").replace("https://zone.onrender.com","https://unblocked-zone.onrender.com");
+        if (shownApi.indexOf("https://bullbestyoutuber.s3.us-east-1.amazonaws.com/index.html") === 0) shownApi = "https://unblocked-zone.onrender.com";
+        loader.innerHTML = '<h1>Loader failed</h1><p>The account system could not be attached to the single-file loader.</p><p class="err">' + String(err && err.message ? err.message : err).replace(/[&<>]/g, function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'})[c];}) + '</p><p class="err">API URL: ' + shownApi.replace(/[&<>]/g, function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;'})[c];}) + '</p><button onclick="location.reload()">Retry</button>';
       }
     })();
   </script>

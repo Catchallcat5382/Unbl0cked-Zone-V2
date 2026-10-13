@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title>Minecraft grass block</title>
+  <defs>
+    <linearGradient id="grass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#79c843"/>
+      <stop offset="1" stop-color="#3f8e2e"/>
+    </linearGradient>
+    <linearGradient id="dirt" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a96b3d"/>
+      <stop offset="1" stop-color="#704123"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="34" fill="#16251b"/>
+  <path d="M30 76 128 28l98 48-98 51z" fill="url(#grass)" stroke="#1e5524" stroke-width="6"/>
+  <path d="M30 76v104l98 48V127z" fill="url(#dirt)" stroke="#55331f" stroke-width="6"/>
+  <path d="m226 76-98 51v101l98-48z" fill="#80502d" stroke="#55331f" stroke-width="6"/>
+  <path d="m67 94 18-9 17 8-18 10zm39-20 18-9 17 8-18 10zm43 22 19-10 17 8-19 11zM67 134l18 9-18 10zm40 24 17 8-18 10-17-9zm60-20 18-10 17 8-18 11zM151 184l19-10 17 8-19 11z" fill="#c0804a" opacity=".72"/>
+  <path d="m58 66 24-12 14 7-25 13zm73-36 24 12-19 10-23-12zm39 20 20 10-19 10-20-10z" fill="#9be15c" opacity=".85"/>
+</svg>
