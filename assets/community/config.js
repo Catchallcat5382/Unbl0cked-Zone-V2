@@ -4,7 +4,9 @@ window.UZ_NORMALIZE_API_URL = function(value) {
 };
 try {
   localStorage.removeItem('uzMongoApiUrl');
+  localStorage.removeItem('uzMongoToken');
   sessionStorage.removeItem('uzMongoToken');
+  sessionStorage.removeItem('uzSessionOk');
 } catch(e) {}
 window.UZ_COMMUNITY_CONFIG = {
   supabaseUrl: '',

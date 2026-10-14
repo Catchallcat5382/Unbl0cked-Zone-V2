@@ -3,6 +3,7 @@
   window.UZ_ACCOUNT_DEBUG.push('auth-gate-start');
   var cfg = window.UZ_COMMUNITY_CONFIG || {};
   var client = null;
+  if (cfg.authProvider === 'firebase') cfg.mongoApiUrl = '';
   var mongoApiUrl = String(cfg.mongoApiUrl || '').replace(/\/$/, '');
   var mongoMode = cfg.authProvider === 'mongo' && !!mongoApiUrl;
   var firebaseMode = cfg.authProvider === 'firebase';
@@ -415,7 +416,7 @@
       res = await fetch(mongoApiUrl + path, options);
     } catch (e) {
       debugLog('api-fetch-failed', path + ' ' + (e && e.name ? e.name : 'fetch'));
-      var offline = new Error('Mongo account API is not reachable. This Firebase build should not use Mongo unless authProvider is set to mongo.');
+      var offline = new Error('Firebase account service is not ready yet. Refresh and try again.');
       offline.cause = e;
       offline.offline = true;
       throw offline;

@@ -4,6 +4,7 @@
   var cfg = window.UZ_COMMUNITY_CONFIG || {};
   var state = { client: null, user: null, profile: null, tab: 'chat', channelName: 'chat', replyTo: null, realtime: null, snapshotCollection: null, snapshotUserId: null, latestSnapshot: null, profileRealtime: null, profileUserId: null, membersRealtime: null, membersUserId: null, notificationUnsub: null, notificationUserId: null, presenceChannel: null, onlineIds: {}, profileByUser: {}, memberRows: [], presenceReady: true, kickReady: true, heartbeatTimer: null, authUnsub: null, pendingChatAttachments: [], pendingPostAttachment: null, pendingAnnouncementAttachments: [], pendingAnnouncementEdits: {}, pendingPostEdits: {}, recentlyDeletedMessages: {}, jumpToLatest: true, firestoreCooldownUntil: 0 };
   var MAX_ATTACHMENTS = 20;
+  if (cfg.authProvider === 'firebase') cfg.mongoApiUrl = '';
   var mongoApiUrl = String(cfg.mongoApiUrl || '').replace(/\/$/, '');
   var mongoMode = cfg.authProvider === 'mongo' && !!mongoApiUrl;
   var firebaseMode = cfg.authProvider === 'firebase';
@@ -82,7 +83,7 @@
       res = await fetch(mongoApiUrl + path, options);
     } catch (e) {
       debugLog('api-failed', path + ' ' + (e && e.name ? e.name : 'fetch'));
-      var offline = new Error('Mongo account API is not reachable. This Firebase build should not use Mongo unless authProvider is set to mongo.');
+      var offline = new Error('Firebase account service is not ready yet. Refresh and try again.');
       offline.cause = e;
       offline.offline = true;
       throw offline;
