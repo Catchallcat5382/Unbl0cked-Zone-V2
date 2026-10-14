@@ -11949,7 +11949,7 @@ async function check() { if (authTransition) return; if (isTempOwner()) { setLig
     document.body.classList.add('uz-auth-locked');
     var gate=document.createElement('div'); gate.id='uz-auth-gate'; gate.className='uz-auth-gate uz-auth-ms-style uz-auth-fail-visible';
     var debug = (window.UZ_ACCOUNT_DEBUG || []).join(' | ') || 'no debug markers';
-    var api = cfg.authProvider === 'firebase' ? 'Firebase' : ((cfg && cfg.mongoApiUrl) || window.UZ_MONGO_API_URL || 'missing api url');
+    var api = cfg.authProvider === 'firebase' ? 'Firebase' : ((cfg && cfg.mongoApiUrl) || 'missing api url');
     function safe(v){ return String(v).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
     gate.innerHTML='<div class="uz-auth-card"><section class="uz-auth-form"><h1>Account system stopped while loading</h1><p class="uz-auth-detail">The Firebase account gate did not finish starting. Refresh once; if it keeps happening, Firebase scripts may be blocked on this network.</p><div class="uz-auth-setup"><b>Debug</b><span>API: '+safe(api)+'</span><span>Loaded: '+safe(debug)+'</span></div><button class="community-btn uz-auth-primary" type="button" onclick="location.reload()">Retry</button></section></div>';
     document.body.appendChild(gate);
