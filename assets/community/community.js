@@ -5,8 +5,8 @@
   var state = { client: null, user: null, profile: null, tab: 'chat', channelName: 'chat', replyTo: null, realtime: null, snapshotCollection: null, snapshotUserId: null, latestSnapshot: null, profileRealtime: null, profileUserId: null, membersRealtime: null, membersUserId: null, notificationUnsub: null, notificationUserId: null, presenceChannel: null, onlineIds: {}, profileByUser: {}, memberRows: [], presenceReady: true, kickReady: true, heartbeatTimer: null, authUnsub: null, pendingChatAttachments: [], pendingPostAttachment: null, pendingAnnouncementAttachments: [], pendingAnnouncementEdits: {}, pendingPostEdits: {}, recentlyDeletedMessages: {}, jumpToLatest: true, firestoreCooldownUntil: 0 };
   var MAX_ATTACHMENTS = 20;
   var mongoApiUrl = String(cfg.mongoApiUrl || '').replace(/\/$/, '');
-  var mongoMode = !!mongoApiUrl;
-  var firebaseMode = !mongoMode && cfg.authProvider === 'firebase';
+  var mongoMode = cfg.authProvider === 'mongo' && !!mongoApiUrl;
+  var firebaseMode = cfg.authProvider === 'firebase';
   var firebaseReady = firebaseMode && cfg.firebaseConfig && cfg.firebaseConfig.apiKey && cfg.firebaseConfig.projectId && window.firebase;
   var ready = mongoMode || firebaseReady || Boolean(cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase);
   var storageKey = 'uzCommunityProfileName';
@@ -82,7 +82,7 @@
       res = await fetch(mongoApiUrl + path, options);
     } catch (e) {
       debugLog('api-failed', path + ' ' + (e && e.name ? e.name : 'fetch'));
-      var offline = new Error('Mongo account API is not reachable at ' + mongoApiUrl + '. If this host is blocked, switch the API URL to a different deployed host.');
+      var offline = new Error('Mongo account API is not reachable. This Firebase build should not use Mongo unless authProvider is set to mongo.');
       offline.cause = e;
       offline.offline = true;
       throw offline;
