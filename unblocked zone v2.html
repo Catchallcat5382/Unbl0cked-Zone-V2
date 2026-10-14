@@ -4,67 +4,58 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>New Tab</title>
-  <style>
-    html,body{margin:0;min-height:100%;background:#fff;color:#111;font-family:Arial,sans-serif}
-    body{display:grid;place-items:center}
-    main{max-width:560px;padding:28px}
-    h1{margin:0 0 10px;font-size:24px}.err{white-space:pre-wrap;color:#555}button{border:1px solid #aaa;background:#f8f8f8;border-radius:4px;padding:8px 12px;cursor:pointer}
-  </style>
 </head>
 <body>
-  <main id="loader">
-    <h1>Loading</h1>
-    <p>Opening the live build.</p>
-  </main>
   <script>
     (async function () {
       var buildRevision = '57c855f';
-      var buildVersion = 'live-' + buildRevision + '-' + Date.now();
-      var rawBaseUrl = 'https://cdn.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@' + buildRevision + '/assets/';
-      var pageUrl = rawBaseUrl + 'index.html';
-      var scriptFiles = ['community/config.js', 'community/community.js', 'community/auth-gate.js'];
-      var fallbacks = [
+      var cacheKey = '?v=' + buildRevision + '-' + Date.now();
+      var roots = [
+        new URL('assets/', location.href).href,
+        'https://raw.githubusercontent.com/Catchallcat5382/Unbl0cked-Zone-V2/' + buildRevision + '/assets/',
+        'https://cdn.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@' + buildRevision + '/assets/',
         'https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@' + buildRevision + '/assets/',
         'https://gcore.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@' + buildRevision + '/assets/',
         'https://fastly.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@' + buildRevision + '/assets/'
       ];
-      var baseUrl = rawBaseUrl;
-      var loader = document.getElementById('loader');
-      function esc(value) { return String(value == null ? '' : value).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
-      try {
-        var cacheKey = '?v=' + buildVersion;
-        var res = await fetch(pageUrl + cacheKey, { cache: 'no-store' });
-        for (var i = 0; !res.ok && i < fallbacks.length; i++) {
-          res = await fetch(fallbacks[i] + 'index.html' + cacheKey, { cache: 'no-store' });
-          if (res.ok) baseUrl = fallbacks[i];
-        }
-        if (!res.ok) throw new Error('Live build returned HTTP ' + res.status);
-        var html = await res.text();
-        try {
-          var cssRes = await fetch(baseUrl + 'community/community.css' + cacheKey, { cache: 'no-store' });
-          if (cssRes.ok) {
-            var css = await cssRes.text();
-            html = html.replace(/<link\s+rel=["']stylesheet["']\s+href=["']community\/community\.css["']\s*>/i, '');
-            html = html.replace(/<head([^>]*)>/i, '<head$1><style id="community-inline-css">' + css.replace(/<\/style/gi, '<\/style') + '</style>');
-          }
-        } catch (cssErr) {}
-        for (var j = 0; j < scriptFiles.length; j++) {
-          var scriptUrl = baseUrl + scriptFiles[j];
-          var scriptRes = await fetch(scriptUrl + cacheKey, { cache: 'no-store' });
-          if (!scriptRes.ok) throw new Error(scriptFiles[j] + ' returned HTTP ' + scriptRes.status);
-          var js = await scriptRes.text();
-          var escapedFile = scriptFiles[j].replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\//g, '\\/');
-          var srcPattern = new RegExp("<script\\s+src=[\"']" + escapedFile + "[\"']\\s*><\\/script>", 'i');
-          html = html.replace(srcPattern, '<script data-inline="' + scriptFiles[j] + '">' + js.replace(/<\/script/gi, '<\\/script') + '<\\/script>');
-        }
-        if (/<base\s/i.test(html)) html = html.replace(/<base\s[^>]*>/i, '<base href="' + baseUrl + '">');
-        else html = html.replace(/<head([^>]*)>/i, '<head$1><base href="' + baseUrl + '">');
-        document.open();
-        document.write(html);
-        document.close();
-      } catch (err) {
-        loader.innerHTML = '<h1>Error 404</h1><p>Page Not Found</p><p class="err">' + esc(err && err.message ? err.message : err) + '</p><button onclick="location.reload()">Retry</button>';
+      var scriptFiles = ['community/config.js', 'community/community.js', 'community/auth-gate.js'];
+
+      async function read(url) {
+        var response = await fetch(url + cacheKey, { cache: 'no-store' });
+        if (!response.ok) throw new Error(url + ' returned HTTP ' + response.status);
+        return response.text();
       }
+
+      async function fetchBuild(baseUrl) {
+        var html = await read(baseUrl + 'index.html');
+        var css = await read(baseUrl + 'community/community.css');
+        var scripts = [];
+        for (var i = 0; i < scriptFiles.length; i++) scripts.push(await read(baseUrl + scriptFiles[i]));
+        return { baseUrl: baseUrl, html: html, css: css, scripts: scripts };
+      }
+
+      var build;
+      var lastError;
+      for (var i = 0; i < roots.length; i++) {
+        try {
+          build = await fetchBuild(roots[i]);
+          break;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      if (!build) throw lastError || new Error('The live build could not be loaded.');
+
+      var html = build.html.replace(/<link\s+rel=["']stylesheet["']\s+href=["']community\/community\.css["']\s*>/i, '');
+      html = html.replace(/<head([^>]*)>/i, '<head$1><base href="' + build.baseUrl + '"><style id="community-inline-css">' + build.css.replace(/<\/style/gi, '<\\/style') + '</style>');
+      for (var j = 0; j < scriptFiles.length; j++) {
+        var escapedFile = scriptFiles[j].replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\//g, '\\/');
+        var srcPattern = new RegExp('<script\\s+src=["\']' + escapedFile + '["\']\\s*><\\/script>', 'i');
+        html = html.replace(srcPattern, '<script data-inline="' + scriptFiles[j] + '">' + build.scripts[j].replace(/<\/script/gi, '<\\/script') + '<\\/script>');
+      }
+      document.open();
+      document.write(html);
+      document.close();
     })();
   </script>
 </body>

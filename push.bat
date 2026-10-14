@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion EnableDelayedExpansion
 cd /d "%~dp0"
 
 set "REMOTE_URL=https://github.com/Catchallcat5382/Unbl0cked-Zone-V2.git"
@@ -79,7 +79,7 @@ if errorlevel 1 goto :git_error
 echo.
 echo Staging, committing, and pushing without asking...
 
-git add -A
+git add -A -- . ":(exclude)Owner Unlock Code.txt" ":(exclude).env" ":(exclude).env.*"
 if errorlevel 1 goto :git_error
 
 git diff --cached --quiet
@@ -87,6 +87,18 @@ if errorlevel 2 goto :git_error
 if errorlevel 1 (
   git commit -m "Update site files"
   if errorlevel 1 goto :git_error
+
+  for /f "delims=" %%H in ('git rev-parse --short HEAD') do set "BUILD_REVISION=%%H"
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "$utf8=New-Object System.Text.UTF8Encoding($false); $p=Join-Path $PWD 'unblocked zone v2.html'; $t=[IO.File]::ReadAllText($p); $t=[regex]::Replace($t, 'var buildRevision = ''[^'']+'';', 'var buildRevision = ''!BUILD_REVISION!'';', 1); [IO.File]::WriteAllText($p,$t,$utf8); $p=Join-Path $PWD 'assets\class.html'; $t=[IO.File]::ReadAllText($p); $t=[regex]::Replace($t, 'var _revision = "[^"]+";', 'var _revision = "!BUILD_REVISION!";', 1); [IO.File]::WriteAllText($p,$t,$utf8)"
+  if errorlevel 1 goto :git_error
+  git add -- "unblocked zone v2.html" "assets/class.html"
+  if errorlevel 1 goto :git_error
+  git diff --cached --quiet
+  if errorlevel 2 goto :git_error
+  if errorlevel 1 (
+    git commit -m "Pin launchers to latest site build"
+    if errorlevel 1 goto :git_error
+  )
 ) else (
   echo No new file changes to commit.
 )
