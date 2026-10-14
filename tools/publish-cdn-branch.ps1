@@ -5,6 +5,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $paths = @(
+  'unblocked zone v2.html',
+  'assets/class.html',
   'assets/index.html',
   'assets/community/community.css',
   'assets/community/config.js',
