@@ -28,7 +28,8 @@ try {
   if ($LASTEXITCODE -ne 0 -or -not $tree) { throw 'Could not create the CDN branch tree.' }
 
   $parent = ''
-  $remoteLine = (& git ls-remote --heads origin ('refs/heads/' + $Branch)).Trim()
+  $remoteOutput = @(& git ls-remote --heads origin ('refs/heads/' + $Branch))
+  $remoteLine = ($remoteOutput -join "`n").Trim()
   if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the remote CDN branch.' }
   if ($remoteLine) {
     & git fetch --quiet origin ('refs/heads/' + $Branch + ':refs/remotes/origin/' + $Branch)
