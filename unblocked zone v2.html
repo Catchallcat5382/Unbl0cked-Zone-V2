@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>New Tab</title>
+</head>
+<body>
+  <script>
+    (async function () {
+      var buildRevision = '12eeb8e';
+      var cacheKey = '?v=' + buildRevision;
+      var roots = [
+        new URL('assets/', location.href).href,
+        'https://raw.githubusercontent.com/Catchallcat5382/Unbl0cked-Zone-V2/' + buildRevision + '/assets/',
+        'https://cdn.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@cdn/assets/',
+        'https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@cdn/assets/',
+        'https://gcore.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@cdn/assets/',
+        'https://fastly.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@cdn/assets/'
+      ];
+      var scriptFiles = ['community/config.js', 'community/community.js', 'community/auth-gate.js'];
+
+      async function read(url) {
+        var response = await fetch(url + cacheKey, { cache: 'default' });
+        if (!response.ok) throw new Error(url + ' returned HTTP ' + response.status);
+        return response.text();
+      }
+
+      async function fetchBuild(baseUrl) {
+        var files = await Promise.all([
+          read(baseUrl + 'index.html'),
+          read(baseUrl + 'community/community.css')
+        ].concat(scriptFiles.map(function(file){ return read(baseUrl + file); })));
+        return { baseUrl: baseUrl, html: files[0], css: files[1], scripts: files.slice(2) };
+      }
+
+      function firstSuccessful(promises) {
+        return new Promise(function(resolve, reject){
+          var remaining = promises.length;
+          var lastError = null;
+          promises.forEach(function(promise){
+            Promise.resolve(promise).then(resolve, function(error){
+              lastError = error;
+              remaining--;
+              if (!remaining) reject(lastError || new Error('The live build could not be loaded.'));
+            });
+          });
+        });
+      }
+
+      var build = await firstSuccessful(roots.map(fetchBuild));
+
+      var html = build.html.replace(/<link\s+rel=["']stylesheet["']\s+href=["']community\/community\.css["']\s*>/i, '');
+      html = html.replace(/<head([^>]*)>/i, '<head$1><base href="' + build.baseUrl + '"><style id="community-inline-css">' + build.css.replace(/<\/style/gi, '<\\/style') + '</style>');
+      for (var j = 0; j < scriptFiles.length; j++) {
+        var escapedFile = scriptFiles[j].replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\//g, '\\/');
+        var srcPattern = new RegExp('<script\\s+src=["\']' + escapedFile + '["\']\\s*><\\/script>', 'i');
+        html = html.replace(srcPattern, '<script data-inline="' + scriptFiles[j] + '">' + build.scripts[j].replace(/<\/script/gi, '<\\/script') + '<\\/script>');
+      }
+      document.open();
+      document.write(html);
+      document.close();
+    })();
+  </script>
+</body>
+</html>
