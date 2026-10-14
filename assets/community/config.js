@@ -25,7 +25,7 @@ window.UZ_COMMUNITY_CONFIG = {
   requireLogin: true,
   minNameLength: 2,
   maxNameLength: 24,
-  blockedWords: ['fuck','shit','bitch','asshole','nigger','nigga','faggot','retard','cunt','kike','spic','chink','coon','whore','slut','rape','porn','sex']
+  blockedWords: ['fuck','fucker','motherfucker','fu','stfu','mf','wtf','shit','bullshit','bitch','asshole','bastard','damn','crap','piss','dick','cock','pussy','nigger','nigga','digger','faggot','retard','cunt','kike','spic','chink','coon','whore','slut','rape','porn','sex','kys','kill yourself','nazi']
 };
 window.UZ_ACCOUNT_DEBUG = window.UZ_ACCOUNT_DEBUG || [];
 window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');

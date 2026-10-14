@@ -9,7 +9,7 @@
   <script>
     (async function () {
       var buildRevision = '12f3c75';
-      var cacheKey = '?v=' + buildRevision + '-' + Date.now();
+      var cacheKey = '?v=' + buildRevision;
       var roots = [
         new URL('assets/', location.href).href,
         'https://raw.githubusercontent.com/Catchallcat5382/Unbl0cked-Zone-V2/' + buildRevision + '/assets/',
@@ -21,30 +21,34 @@
       var scriptFiles = ['community/config.js', 'community/community.js', 'community/auth-gate.js'];
 
       async function read(url) {
-        var response = await fetch(url + cacheKey, { cache: 'no-store' });
+        var response = await fetch(url + cacheKey, { cache: 'default' });
         if (!response.ok) throw new Error(url + ' returned HTTP ' + response.status);
         return response.text();
       }
 
       async function fetchBuild(baseUrl) {
-        var html = await read(baseUrl + 'index.html');
-        var css = await read(baseUrl + 'community/community.css');
-        var scripts = [];
-        for (var i = 0; i < scriptFiles.length; i++) scripts.push(await read(baseUrl + scriptFiles[i]));
-        return { baseUrl: baseUrl, html: html, css: css, scripts: scripts };
+        var files = await Promise.all([
+          read(baseUrl + 'index.html'),
+          read(baseUrl + 'community/community.css')
+        ].concat(scriptFiles.map(function(file){ return read(baseUrl + file); })));
+        return { baseUrl: baseUrl, html: files[0], css: files[1], scripts: files.slice(2) };
       }
 
-      var build;
-      var lastError;
-      for (var i = 0; i < roots.length; i++) {
-        try {
-          build = await fetchBuild(roots[i]);
-          break;
-        } catch (error) {
-          lastError = error;
-        }
+      function firstSuccessful(promises) {
+        return new Promise(function(resolve, reject){
+          var remaining = promises.length;
+          var lastError = null;
+          promises.forEach(function(promise){
+            Promise.resolve(promise).then(resolve, function(error){
+              lastError = error;
+              remaining--;
+              if (!remaining) reject(lastError || new Error('The live build could not be loaded.'));
+            });
+          });
+        });
       }
-      if (!build) throw lastError || new Error('The live build could not be loaded.');
+
+      var build = await firstSuccessful(roots.map(fetchBuild));
 
       var html = build.html.replace(/<link\s+rel=["']stylesheet["']\s+href=["']community\/community\.css["']\s*>/i, '');
       html = html.replace(/<head([^>]*)>/i, '<head$1><base href="' + build.baseUrl + '"><style id="community-inline-css">' + build.css.replace(/<\/style/gi, '<\\/style') + '</style>');

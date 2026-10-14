@@ -13,6 +13,7 @@
   var storageKey = 'uzCommunityProfileName';
   var channelInfo = {
     chat: { tab: 'chat', label: 'general-chat', title: 'General Chat', note: 'Live chat for everyone signed in.' },
+    homework: { tab: 'chat', label: 'homework', title: 'Homework', note: 'Ask questions and work through homework together.' },
     settings: { tab: 'posts', label: 'settings-share', title: 'Settings Share', note: 'Everyone can upload and copy settings presets.' },
     suggestions: { tab: 'posts', label: 'suggestions', title: 'Suggestions', note: 'Post ideas, bugs, and requests.' },
     'voice-lounge': { tab: 'voice', label: 'voice-lounge', title: 'Voice Lounge', note: 'Join the community voice room. Live mic audio needs WebRTC hosting.' },
@@ -61,7 +62,27 @@
   function rejectRestrictedMention(text, input) { if (/(^|\s)@(everyone|here)\b/i.test(String(text || '')) && !canBroadcastMention()) { warnBlockedInput(input, '@everyone and @here are restricted to admins and above.'); return true; } return false; }
   function notifySaved(msg) { var n = $('community-save-note') || $('uz-autosave-note'); if (!n) { n = document.createElement('div'); n.id = 'community-save-note'; n.className = 'community-save-note'; document.body.appendChild(n); } n.textContent = msg || 'Saved'; n.classList.add('show'); clearTimeout(notifySaved.t); notifySaved.t = setTimeout(function(){ n.classList.remove('show'); }, 1500); }
   function normalizeName(v) { return String(v || '').replace(/\s+/g, ' ').trim().slice(0, cfg.maxNameLength || 24); }
-  function hasBadWord(v) { var s = String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); return (cfg.blockedWords || []).some(function (w) { return s.indexOf(String(w).toLowerCase().replace(/[^a-z0-9]/g, '')) !== -1; }); }
+  function moderationNormalize(value) {
+    var raw = String(value || '').toLowerCase();
+    try { raw = raw.normalize('NFKD').replace(/[\u0300-\u036f]/g, ''); } catch (e) {}
+    raw = raw.replace(/[@4]/g, 'a').replace(/8/g, 'b').replace(/3/g, 'e').replace(/[1!|]/g, 'i').replace(/0/g, 'o').replace(/[5$]/g, 's').replace(/7/g, 't').replace(/9/g, 'g');
+    var spaced = raw.replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+    var tokens = spaced ? spaced.split(' ').map(function(token){ return token.replace(/(.)\1+/g, '$1'); }) : [];
+    return { raw: raw, compact: tokens.join('').replace(/(.)\1+/g, '$1'), tokens: tokens };
+  }
+  function hasBadWord(value) {
+    var forms = moderationNormalize(value);
+    return (cfg.blockedWords || []).some(function(word){
+      var target = moderationNormalize(word).compact;
+      if (!target) return false;
+      if (target.length <= 2) {
+        if (forms.tokens.indexOf(target) !== -1) return true;
+        var separated = target.split('').join('[^a-z0-9]*');
+        return new RegExp('(?:^|[^a-z0-9])' + separated + '(?:$|[^a-z0-9])', 'i').test(forms.raw);
+      }
+      return forms.compact.indexOf(target) !== -1;
+    });
+  }
   function validName(v) { v = normalizeName(v); return v.length >= (cfg.minNameLength || 2) && !hasBadWord(v); }
   function profileUsername() { return state.profile && state.profile.username ? state.profile.username : (state.user && state.user.email ? state.user.email.split('@')[0] : 'guest'); }
   function getName() { if (isTempOwner() && !state.user) return 'Temporary Owner'; return normalizeName(localStorage.getItem(storageKey + ':' + profileUsername()) || ''); }
@@ -860,7 +881,9 @@
         var collection = state.tab === 'chat' ? 'messages' : 'posts';
         var snap = firebaseSnapshot;
         var rows = snap.docs.map(firebaseRow).reverse().filter(function(row){ return !row.deleted_at || !!state.recentlyDeletedMessages[String(row.id)]; });
+        if (state.tab === 'chat') rows = rows.filter(function(row){ return String(row.channel || 'chat') === state.channelName; });
         if (state.tab === 'posts') rows = rows.filter(function(row){ return normalizePostChannel(row.title) === state.channelName; });
+        rows = rows.filter(function(row){ return !hasBadWord((row.title || '') + ' ' + (row.body || '')); });
         await loadFirebaseAttachments(collection, rows);
         if (!state.membersRealtime) subscribeMembers();
         state.profileByUser = {}; (state.memberRows || []).forEach(function(p){ state.profileByUser[String(p.id)] = p; });
@@ -876,7 +899,9 @@
         if (state.tab === 'members') { await loadMembers(true); return; }
         var data = await mongoFetch(state.tab === 'chat' ? '/messages' : '/posts');
         var rows = state.tab === 'chat' ? (data.messages || []).map(mongoMessage).reverse().filter(function(row){ return !row.deleted_at || !!state.recentlyDeletedMessages[String(row.id)]; }) : (data.posts || []).map(mongoPost).reverse().filter(function(row){ return !row.deleted_at; });
+        if (state.tab === 'chat') rows = rows.filter(function(row){ return String(row.channel || 'chat') === state.channelName; });
         if (state.tab === 'posts') rows = rows.filter(function(row){ return normalizePostChannel(row.title) === state.channelName; });
+        rows = rows.filter(function(row){ return !hasBadWord((row.title || '') + ' ' + (row.body || '')); });
         state.profileByUser = {}; (state.memberRows || []).forEach(function(p){ state.profileByUser[String(p.id)] = p; });
         list.innerHTML = rows.map(renderItem).join('') || '<div class="community-message">Nothing here yet.</div>';
         if (state.tab === 'chat') wireMessageActions(rows); else wirePostActionsV2(rows);
@@ -891,7 +916,9 @@
     if (res.error && handleProfileError(res.error)) { res = await state.client.from(table).select('*, profiles(' + profileFields() + ', email)').order('created_at', { ascending: false }).limit(100); }
     if (res.error) { list.innerHTML = '<div class="community-message community-locked">' + esc(res.error.message) + '</div>'; return; }
     var rows = (res.data || []).slice().reverse().filter(function(row){ return !row.deleted_at || !!state.recentlyDeletedMessages[String(row.id)]; });
+    if (state.tab === 'chat') rows = rows.filter(function(row){ return String(row.channel || 'chat') === state.channelName; });
     if (state.tab === 'posts') rows = rows.filter(function(row){ return normalizePostChannel(row.title) === state.channelName; });
+    rows = rows.filter(function(row){ return !hasBadWord((row.title || '') + ' ' + (row.body || '')); });
     state.profileByUser = {}; rows.forEach(function(r){ if (r.profiles && r.user_id) state.profileByUser[String(r.user_id)] = r.profiles; });
     list.innerHTML = rows.map(renderItem).join('') || '<div class="community-message">Nothing here yet.</div>';
         if (state.tab === 'chat') wireMessageActions(rows); else wirePostActionsV2(rows);
@@ -1256,7 +1283,7 @@
   }
   async function runStaffCommandText(text) { var parsed = parseStaffCommand(text); if (!parsed) return { ok: false, message: 'Type a command first.' }; if (parsed.local) return { ok: true, message: parsed.local }; if (parsed.error) return { ok: false, message: parsed.error }; if (isTempOwner()) return { ok: false, message: 'Temporary owner can view the terminal, but live commands need a real staff account.' }; if (!state.user || !isStaff()) return { ok: false, message: 'Staff account required.' }; if (!parsed.target) return { ok: false, message: 'Add a target username.' }; var rr = role(); if (['ban','unban','setrole','deleteuser'].indexOf(parsed.action) !== -1 && rr !== 'owner') return { ok: false, message: 'Owner role required for /' + parsed.action + '.' }; if (parsed.action === 'kick' && ['owner','admin'].indexOf(rr) === -1) return { ok: false, message: 'Admin or owner required for /kick.' }; if (['warn','mute','unmute'].indexOf(parsed.action) !== -1 && ['owner','admin','mod'].indexOf(rr) === -1) return { ok: false, message: 'Staff role required.' }; if (firebaseMode) { try { var target = await firebaseFindUser(parsed.target); if (!target) return { ok: false, message: 'Target not found.' }; if (target.data.role === 'owner' && target.data.username !== profileUsername()) return { ok: false, message: 'Owners cannot moderate other owners.' }; var set = {}; if (parsed.action === 'setrole') { if (!parsed.newRole) return { ok: false, message: 'Add a role: owner, admin, mod, member, or banned.' }; set.role = parsed.newRole; set.banned_until = parsed.newRole === 'banned' ? '2099-01-01T00:00:00.000Z' : null; if (parsed.newRole !== 'deleted') set.deleted_at = null; } else if (parsed.action === 'deleteuser') { var deletedRef = state.client.db.collection('deletedAccounts').doc(target.id); await deletedRef.set({ username: target.data.username || parsed.target, deleted_at: new Date().toISOString(), deleted_by: state.user.id }); try { await target.ref.delete(); } catch(deleteError) { try { await deletedRef.delete(); } catch(markerError) {} throw deleteError; } audit('command', '/' + parsed.action + ' ' + parsed.target); notifySaved('Command ran'); loadMembers(true); loadItems(); return { ok: true, message: 'Command ran: /' + parsed.action + ' ' + parsed.target }; } else if (parsed.action === 'ban') { set.role = 'banned'; set.banned_until = '2099-01-01T00:00:00.000Z'; set.deleted_at = null; } else if (parsed.action === 'unban') { set.role = 'member'; set.banned_until = null; set.deleted_at = null; } else if (parsed.action === 'warn') { set.warnings = (Number(target.data.warnings || 0) + 1); } else if (parsed.action === 'mute') { set.muted_until = new Date(Date.now() + (parsed.minutes || 10) * 60000).toISOString(); } else if (parsed.action === 'unmute') { set.muted_until = null; } else if (parsed.action === 'kick') { set.kicked_until = new Date(Date.now() + (parsed.minutes || 10) * 60000).toISOString(); } await target.ref.set(set, { merge: true }); if (parsed.action === 'unban') clearDeviceBan(parsed.target); audit('command', '/' + parsed.action + ' ' + parsed.target); notifySaved('Command ran'); loadMembers(true); loadItems(); return { ok: true, message: 'Command ran: /' + parsed.action + ' ' + parsed.target }; } catch(e) { return { ok: false, message: e.message }; } } if (mongoMode) { try { if (parsed.action === 'setrole') { if (!parsed.newRole) return { ok: false, message: 'Add a role: owner, admin, mod, member, or banned.' }; await mongoFetch('/staff/role', { method: 'POST', body: JSON.stringify({ username: parsed.target, role: parsed.newRole }) }); } else if (parsed.action === 'deleteuser') { await mongoFetch('/staff/delete-user', { method: 'POST', body: JSON.stringify({ username: parsed.target }) }); } else { await mongoFetch('/staff/moderate', { method: 'POST', body: JSON.stringify({ username: parsed.target, action: parsed.action, reason: parsed.reason || '', minutes: parsed.minutes || null }) }); } if (parsed.action === 'unban') { try { localStorage.removeItem('uzBannedAccount:' + String(parsed.target || '').toLowerCase()); } catch(e) {} } audit('command', '/' + parsed.action + ' ' + parsed.target); notifySaved('Command ran'); loadMembers(true); loadItems(); return { ok: true, message: 'Command ran: /' + parsed.action + ' ' + parsed.target }; } catch(e) { return { ok: false, message: e.message }; } } initClient(); var res; if (parsed.action === 'setrole') { if (!parsed.newRole) return { ok: false, message: 'Add a role: owner, admin, mod, member, or banned.' }; res = await state.client.rpc('set_user_role', { target_username: parsed.target, new_role: parsed.newRole }); } else if (parsed.action === 'deleteuser') { res = await state.client.rpc('delete_user_by_username', { target_username: parsed.target }); } else { res = await state.client.rpc('moderate_user', { target_username: parsed.target, action_name: parsed.action, reason_text: parsed.reason || '', duration_minutes: parsed.minutes || null }); } if (res.error) return { ok: false, message: res.error.message }; if (parsed.action === 'unban') { try { localStorage.removeItem('uzBannedAccount:' + String(parsed.target || '').toLowerCase()); } catch(e) {} } audit('command', '/' + parsed.action + ' ' + parsed.target); notifySaved('Command ran'); loadMembers(true); loadItems(); return { ok: true, message: 'Command ran: /' + parsed.action + ' ' + parsed.target }; }
   function warnBlockedInput(el, msg) { status(msg || 'Blocked word found. This will not send.'); if (el) { el.classList.remove('community-input-warn'); void el.offsetWidth; el.classList.add('community-input-warn'); el.focus(); } }
-  async function sendMessage() { if (!state.user) { status('Sign in first.'); return; } var input = $('community-chat-input'); if (!input) { status('Chat box is not ready.'); return; } var body = input.value.trim(); if (!body) return; if (hasBadWord(body)) { warnBlockedInput(input, 'Blocked word found. This message will not send.'); return; } if (firebaseMode) { try { var createdRef = await state.client.db.collection('messages').add({ user_id: state.user.id, username: profileUsername(), body: body, created_at: new Date().toISOString() }); input.value = ''; clearChatDraft(); audit('message', body.slice(0,80)); notifySaved('Message sent'); loadItems(); return createdRef; } catch(e) { status(e.message); } return; } if (mongoMode) { try { var mongoResult = await mongoFetch('/messages', { method: 'POST', body: JSON.stringify({ body: body }) }); input.value = ''; clearChatDraft(); audit('message', body.slice(0,80)); notifySaved('Message sent'); loadItems(); return mongoResult; } catch(e) { status(e.message); } return; } initClient(); var res = await state.client.from('chat_messages').insert({ user_id: state.user.id, body: body }); if (res.error) { status(res.error.message); return; } input.value = ''; clearChatDraft(); audit('message', body.slice(0,80)); notifySaved('Message sent'); loadItems(); return res.data; }
+  async function sendMessage() { if (!state.user) { status('Sign in first.'); return; } var input = $('community-chat-input'); if (!input) { status('Chat box is not ready.'); return; } var body = input.value.trim(); if (!body) return; if (hasBadWord(body)) { warnBlockedInput(input, 'Blocked word found. This message will not send.'); return; } if (firebaseMode) { try { var createdRef = await state.client.db.collection('messages').add({ user_id: state.user.id, username: profileUsername(), channel: state.channelName, body: body, created_at: new Date().toISOString() }); input.value = ''; clearChatDraft(); audit('message', body.slice(0,80)); notifySaved('Message sent'); loadItems(); return createdRef; } catch(e) { status(e.message); } return; } if (mongoMode) { try { var mongoResult = await mongoFetch('/messages', { method: 'POST', body: JSON.stringify({ body: body, channel: state.channelName }) }); input.value = ''; clearChatDraft(); audit('message', body.slice(0,80)); notifySaved('Message sent'); loadItems(); return mongoResult; } catch(e) { status(e.message); } return; } initClient(); var res = await state.client.from('chat_messages').insert({ user_id: state.user.id, body: body }); if (res.error) { status(res.error.message); return; } input.value = ''; clearChatDraft(); audit('message', body.slice(0,80)); notifySaved('Message sent'); loadItems(); return res.data; }
   function clearChatDraft() {
     if (state.user) sessionStorage.removeItem('uz-chat-draft:' + state.user.id + ':' + state.channelName);
   }
@@ -1270,7 +1297,7 @@
     if (rejectRestrictedMention(body, input)) return;
     try {
       initClient();
-      var createdMessage = await createFirebaseItemWithAttachments('messages', { user_id: state.user.id, username: profileUsername(), body: body, created_at: new Date().toISOString() }, attachments);
+      var createdMessage = await createFirebaseItemWithAttachments('messages', { user_id: state.user.id, username: profileUsername(), channel: state.channelName, body: body, created_at: new Date().toISOString() }, attachments);
       notifyMentionedUsers(body, { tab: 'chat', channel: state.channelName, id: createdMessage && createdMessage.id }); state.pendingChatAttachments = []; state.replyTo = null; updateReplyPreview(); if (input) input.value = ''; clearChatDraft(); showAttachmentQueue('community-chat-file-choice', []); audit('message', body.slice(0,80)); notifySaved('Message sent'); state.jumpToLatest = true; loadItems();
     } catch (error) { status(error.message || 'Message could not be sent.'); }
   }

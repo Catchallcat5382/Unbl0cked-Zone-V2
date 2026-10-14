@@ -1921,6 +1921,7 @@
             <h2>Community</h2>
             <div class="community-channel-section"><span>TEXT</span>
               <button class="community-tab active" data-community-tab="chat" data-community-channel="chat"># general-chat</button>
+              <button class="community-tab secondary" data-community-tab="chat" data-community-channel="homework"># homework</button>
               <button class="community-tab secondary" data-community-tab="posts" data-community-channel="settings"># settings-share</button>
               <button class="community-tab secondary" data-community-tab="posts" data-community-channel="suggestions"># suggestions</button>
             </div>
@@ -9581,10 +9582,9 @@ window.UZ_COMMUNITY_CONFIG = {
   requireLogin: true,
   minNameLength: 2,
   maxNameLength: 24,
-  blockedWords: ['fuck','shit','bitch','asshole','nigger','nigga','faggot','retard','cunt','kike','spic','chink','coon','whore','slut','rape','porn','sex']
+  blockedWords: ['fuck','fucker','motherfucker','fu','stfu','mf','wtf','shit','bullshit','bitch','asshole','bastard','damn','crap','piss','dick','cock','pussy','nigger','nigga','digger','faggot','retard','cunt','kike','spic','chink','coon','whore','slut','rape','porn','sex','kys','kill yourself','nazi']
 };
 window.UZ_ACCOUNT_DEBUG = window.UZ_ACCOUNT_DEBUG || [];
-try { window.UZ_COMMUNITY_CONFIG.authProvider = 'firebase'; window.UZ_COMMUNITY_CONFIG.mongoApiUrl = ''; localStorage.removeItem('uzMongoApiUrl'); localStorage.removeItem('uzMongoToken'); sessionStorage.removeItem('uzMongoToken'); } catch(e) {}
 window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
 
   </script>
@@ -9595,6 +9595,7 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
   var cfg = window.UZ_COMMUNITY_CONFIG || {};
   var state = { client: null, user: null, profile: null, tab: 'chat', channelName: 'chat', replyTo: null, realtime: null, snapshotCollection: null, snapshotUserId: null, latestSnapshot: null, profileRealtime: null, profileUserId: null, membersRealtime: null, membersUserId: null, notificationUnsub: null, notificationUserId: null, presenceChannel: null, onlineIds: {}, profileByUser: {}, memberRows: [], presenceReady: true, kickReady: true, heartbeatTimer: null, authUnsub: null, pendingChatAttachments: [], pendingPostAttachment: null, pendingAnnouncementAttachments: [], pendingAnnouncementEdits: {}, pendingPostEdits: {}, recentlyDeletedMessages: {}, jumpToLatest: true, firestoreCooldownUntil: 0 };
   var MAX_ATTACHMENTS = 20;
+  if (cfg.authProvider === 'firebase') cfg.mongoApiUrl = '';
   var mongoApiUrl = String(cfg.mongoApiUrl || '').replace(/\/$/, '');
   var mongoMode = cfg.authProvider === 'mongo' && !!mongoApiUrl;
   var firebaseMode = cfg.authProvider === 'firebase';
@@ -9603,28 +9604,13 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
   var storageKey = 'uzCommunityProfileName';
   var channelInfo = {
     chat: { tab: 'chat', label: 'general-chat', title: 'General Chat', note: 'Live chat for everyone signed in.' },
+    homework: { tab: 'chat', label: 'homework', title: 'Homework', note: 'Ask questions and work through homework together.' },
     settings: { tab: 'posts', label: 'settings-share', title: 'Settings Share', note: 'Everyone can upload and copy settings presets.' },
     suggestions: { tab: 'posts', label: 'suggestions', title: 'Suggestions', note: 'Post ideas, bugs, and requests.' },
     'voice-lounge': { tab: 'voice', label: 'voice-lounge', title: 'Voice Lounge', note: 'Join the community voice room. Live mic audio needs WebRTC hosting.' },
     members: { tab: 'members', label: 'members', title: 'Members', note: 'Profiles and role hierarchy.' }
   };
   function $(id) { return document.getElementById(id); }
-  function enableBrowserLanguageHints(root) {
-    var selector = 'textarea, input[type="text"], input:not([type]), [contenteditable="true"]';
-    var fields = [];
-    if (root && root.matches && root.matches(selector)) fields.push(root);
-    if (root && root.querySelectorAll) fields = fields.concat(Array.prototype.slice.call(root.querySelectorAll(selector)));
-    fields.forEach(function(el) {
-      if (!el || el.disabled || el.readOnly || el.matches('[data-language-hints="off"], #uz-command-input, #uz-cmd-user, #uz-cmd-reason')) return;
-      el.spellcheck = true;
-      if (!el.getAttribute('lang')) el.setAttribute('lang', document.documentElement.lang || 'en-US');
-      el.setAttribute('autocorrect', 'on');
-      el.setAttribute('autocapitalize', 'sentences');
-    });
-  }
-  window.UZEnableBrowserLanguageHints = enableBrowserLanguageHints;
-  enableBrowserLanguageHints(document);
-  document.addEventListener('focusin', function(event) { enableBrowserLanguageHints(event.target); }, true);
   function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
   function when(ts) { try { return new Date(ts).toLocaleString(); } catch (e) { return ''; } }
   function status(msg) { var el = $('community-status'); if (el) el.textContent = msg || ''; }
@@ -9667,7 +9653,27 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
   function rejectRestrictedMention(text, input) { if (/(^|\s)@(everyone|here)\b/i.test(String(text || '')) && !canBroadcastMention()) { warnBlockedInput(input, '@everyone and @here are restricted to admins and above.'); return true; } return false; }
   function notifySaved(msg) { var n = $('community-save-note') || $('uz-autosave-note'); if (!n) { n = document.createElement('div'); n.id = 'community-save-note'; n.className = 'community-save-note'; document.body.appendChild(n); } n.textContent = msg || 'Saved'; n.classList.add('show'); clearTimeout(notifySaved.t); notifySaved.t = setTimeout(function(){ n.classList.remove('show'); }, 1500); }
   function normalizeName(v) { return String(v || '').replace(/\s+/g, ' ').trim().slice(0, cfg.maxNameLength || 24); }
-  function hasBadWord(v) { var s = String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); return (cfg.blockedWords || []).some(function (w) { return s.indexOf(String(w).toLowerCase().replace(/[^a-z0-9]/g, '')) !== -1; }); }
+  function moderationNormalize(value) {
+    var raw = String(value || '').toLowerCase();
+    try { raw = raw.normalize('NFKD').replace(/[\u0300-\u036f]/g, ''); } catch (e) {}
+    raw = raw.replace(/[@4]/g, 'a').replace(/8/g, 'b').replace(/3/g, 'e').replace(/[1!|]/g, 'i').replace(/0/g, 'o').replace(/[5$]/g, 's').replace(/7/g, 't').replace(/9/g, 'g');
+    var spaced = raw.replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+    var tokens = spaced ? spaced.split(' ').map(function(token){ return token.replace(/(.)\1+/g, '$1'); }) : [];
+    return { raw: raw, compact: tokens.join('').replace(/(.)\1+/g, '$1'), tokens: tokens };
+  }
+  function hasBadWord(value) {
+    var forms = moderationNormalize(value);
+    return (cfg.blockedWords || []).some(function(word){
+      var target = moderationNormalize(word).compact;
+      if (!target) return false;
+      if (target.length <= 2) {
+        if (forms.tokens.indexOf(target) !== -1) return true;
+        var separated = target.split('').join('[^a-z0-9]*');
+        return new RegExp('(?:^|[^a-z0-9])' + separated + '(?:$|[^a-z0-9])', 'i').test(forms.raw);
+      }
+      return forms.compact.indexOf(target) !== -1;
+    });
+  }
   function validName(v) { v = normalizeName(v); return v.length >= (cfg.minNameLength || 2) && !hasBadWord(v); }
   function profileUsername() { return state.profile && state.profile.username ? state.profile.username : (state.user && state.user.email ? state.user.email.split('@')[0] : 'guest'); }
   function getName() { if (isTempOwner() && !state.user) return 'Temporary Owner'; return normalizeName(localStorage.getItem(storageKey + ':' + profileUsername()) || ''); }
@@ -10012,7 +10018,6 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
     var titlePh = state.channelName === 'settings' ? 'Preset name' : (state.channelName === 'suggestions' ? 'Suggestion title' : 'Thread title');
     var bodyPh = state.channelName === 'settings' ? 'Describe this settings preset, or press Attach settings.' : 'Post text, links, updates, settings, images, or files.';
     post.innerHTML = postOk ? '<div class="community-post-composer"><input id="community-post-title" maxlength="120" placeholder="' + titlePh + '"><textarea id="community-post-body" maxlength="7000" placeholder="' + bodyPh + '"></textarea><div class="community-composer-actions"><button class="community-btn secondary" id="community-attach-settings" type="button">Attach settings</button><label class="community-file-label">Upload file<input id="community-file-input" type="file"></label><span class="community-attachment-choice" id="community-file-choice">No file selected</span><button class="community-btn" id="community-send-post">Publish</button></div></div>' : '<div class="community-message community-locked">' + postAllowedMessage() + '</div>';
-    enableBrowserLanguageHints(chat); enableBrowserLanguageHints(post);
     var sendChat = $('community-send-chat'); if (sendChat) sendChat.onclick = sendMessageV2;
     var chatFile = $('community-chat-file-input'); if (chatFile) chatFile.onchange = attachFileToChat;
     var sendPost = $('community-send-post'); if (sendPost) sendPost.onclick = sendPostMessage;
@@ -10280,7 +10285,6 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
     if (!compose) return;
     if (!(state.user && isStaff())) { compose.innerHTML = '<div class="community-message community-locked">Mod, admin, or owner required to publish announcements.</div>'; return; }
     compose.innerHTML = announcementComposerMarkup();
-    enableBrowserLanguageHints(compose);
     showAttachmentQueue('announcement-file-choice', state.pendingAnnouncementAttachments);
     var file = $('announcement-file-input'); if (file) file.onchange = attachAnnouncementFileV2;
     var send = $('announcement-send'); if (send) send.onclick = publishAnnouncementV2;
@@ -10468,7 +10472,9 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
         var collection = state.tab === 'chat' ? 'messages' : 'posts';
         var snap = firebaseSnapshot;
         var rows = snap.docs.map(firebaseRow).reverse().filter(function(row){ return !row.deleted_at || !!state.recentlyDeletedMessages[String(row.id)]; });
+        if (state.tab === 'chat') rows = rows.filter(function(row){ return String(row.channel || 'chat') === state.channelName; });
         if (state.tab === 'posts') rows = rows.filter(function(row){ return normalizePostChannel(row.title) === state.channelName; });
+        rows = rows.filter(function(row){ return !hasBadWord((row.title || '') + ' ' + (row.body || '')); });
         await loadFirebaseAttachments(collection, rows);
         if (!state.membersRealtime) subscribeMembers();
         state.profileByUser = {}; (state.memberRows || []).forEach(function(p){ state.profileByUser[String(p.id)] = p; });
@@ -10484,7 +10490,9 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
         if (state.tab === 'members') { await loadMembers(true); return; }
         var data = await mongoFetch(state.tab === 'chat' ? '/messages' : '/posts');
         var rows = state.tab === 'chat' ? (data.messages || []).map(mongoMessage).reverse().filter(function(row){ return !row.deleted_at || !!state.recentlyDeletedMessages[String(row.id)]; }) : (data.posts || []).map(mongoPost).reverse().filter(function(row){ return !row.deleted_at; });
+        if (state.tab === 'chat') rows = rows.filter(function(row){ return String(row.channel || 'chat') === state.channelName; });
         if (state.tab === 'posts') rows = rows.filter(function(row){ return normalizePostChannel(row.title) === state.channelName; });
+        rows = rows.filter(function(row){ return !hasBadWord((row.title || '') + ' ' + (row.body || '')); });
         state.profileByUser = {}; (state.memberRows || []).forEach(function(p){ state.profileByUser[String(p.id)] = p; });
         list.innerHTML = rows.map(renderItem).join('') || '<div class="community-message">Nothing here yet.</div>';
         if (state.tab === 'chat') wireMessageActions(rows); else wirePostActionsV2(rows);
@@ -10499,7 +10507,9 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
     if (res.error && handleProfileError(res.error)) { res = await state.client.from(table).select('*, profiles(' + profileFields() + ', email)').order('created_at', { ascending: false }).limit(100); }
     if (res.error) { list.innerHTML = '<div class="community-message community-locked">' + esc(res.error.message) + '</div>'; return; }
     var rows = (res.data || []).slice().reverse().filter(function(row){ return !row.deleted_at || !!state.recentlyDeletedMessages[String(row.id)]; });
+    if (state.tab === 'chat') rows = rows.filter(function(row){ return String(row.channel || 'chat') === state.channelName; });
     if (state.tab === 'posts') rows = rows.filter(function(row){ return normalizePostChannel(row.title) === state.channelName; });
+    rows = rows.filter(function(row){ return !hasBadWord((row.title || '') + ' ' + (row.body || '')); });
     state.profileByUser = {}; rows.forEach(function(r){ if (r.profiles && r.user_id) state.profileByUser[String(r.user_id)] = r.profiles; });
     list.innerHTML = rows.map(renderItem).join('') || '<div class="community-message">Nothing here yet.</div>';
         if (state.tab === 'chat') wireMessageActions(rows); else wirePostActionsV2(rows);
@@ -10528,7 +10538,6 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
   function renderCachedMembers(main) {
     var html = renderMembers(state.memberRows, main);
     if (main && $('community-list')) $('community-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
-    if ($('partners-members-list')) $('partners-members-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
     var side = $('community-side-members'); if (side) side.innerHTML = renderMembers(state.memberRows, false);
     wireMemberActions(); wireProfileLinks();
   }
@@ -10548,7 +10557,6 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
         state.memberRows = (data.members || []).map(fromMongoUser).filter(function(profile){ return !isDeleted(profile); });
         var html = renderMembers(state.memberRows, main);
         if (main && $('community-list')) $('community-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
-        if ($('partners-members-list')) $('partners-members-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
         var side = $('community-side-members'); if (side) side.innerHTML = renderMembers(state.memberRows, false);
         wireMemberActions(); wireProfileLinks();
       } catch(e) { if (main && $('community-list')) $('community-list').innerHTML = '<div class="community-message community-locked">' + esc(e.message) + '</div>'; }
@@ -10561,7 +10569,6 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
     state.memberRows = (res.data || []).filter(function(profile){ return !isDeleted(profile); });
     var html = renderMembers(state.memberRows, main);
     if (main && $('community-list')) $('community-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
-    if ($('partners-members-list')) $('partners-members-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
     var side = $('community-side-members'); if (side) side.innerHTML = renderMembers(state.memberRows, false);
     wireMemberActions(); wireProfileLinks();
   }
@@ -10715,7 +10722,6 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
     var id = String(row.id);
     state.pendingPostEdits[id] = row.attachment || null;
     card.innerHTML = postEditorMarkup(row, state.pendingPostEdits[id]);
-    enableBrowserLanguageHints(card);
     var file = card.querySelector('.community-post-edit-file');
     if (file) file.onchange = async function(e) { try { state.pendingPostEdits[id] = await fileToImageAttachment(e.target.files && e.target.files[0]); card.querySelector('.community-post-edit-choice').textContent = 'Ready: ' + attachmentName(state.pendingPostEdits[id]); } catch(error) { status(error.message || 'File upload failed.'); } };
     var remove = card.querySelector('.community-post-edit-remove-image'); if (remove) remove.onclick = function(){ state.pendingPostEdits[id] = null; card.querySelector('.community-post-edit-choice').textContent = 'No file selected'; remove.remove(); };
@@ -10756,7 +10762,6 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
     var hint = document.createElement('span'); hint.className = 'community-inline-edit-hint'; hint.textContent = 'Ctrl+Enter to save';
     bar.appendChild(hint); bar.appendChild(cancel); bar.appendChild(save); editor.appendChild(area); editor.appendChild(bar);
     bodyEl.style.display = 'none'; editor.dataset.originalBody = String(row.body || ''); root.appendChild(editor);
-    enableBrowserLanguageHints(editor);
     var actions = root.querySelector('.community-message-actions'); if (actions) actions.style.display = 'none';
     var close = function(){ editor.remove(); bodyEl.style.display = ''; if (actions) actions.style.display = ''; };
     var commit = async function(){
@@ -10869,7 +10874,7 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
   }
   async function runStaffCommandText(text) { var parsed = parseStaffCommand(text); if (!parsed) return { ok: false, message: 'Type a command first.' }; if (parsed.local) return { ok: true, message: parsed.local }; if (parsed.error) return { ok: false, message: parsed.error }; if (isTempOwner()) return { ok: false, message: 'Temporary owner can view the terminal, but live commands need a real staff account.' }; if (!state.user || !isStaff()) return { ok: false, message: 'Staff account required.' }; if (!parsed.target) return { ok: false, message: 'Add a target username.' }; var rr = role(); if (['ban','unban','setrole','deleteuser'].indexOf(parsed.action) !== -1 && rr !== 'owner') return { ok: false, message: 'Owner role required for /' + parsed.action + '.' }; if (parsed.action === 'kick' && ['owner','admin'].indexOf(rr) === -1) return { ok: false, message: 'Admin or owner required for /kick.' }; if (['warn','mute','unmute'].indexOf(parsed.action) !== -1 && ['owner','admin','mod'].indexOf(rr) === -1) return { ok: false, message: 'Staff role required.' }; if (firebaseMode) { try { var target = await firebaseFindUser(parsed.target); if (!target) return { ok: false, message: 'Target not found.' }; if (target.data.role === 'owner' && target.data.username !== profileUsername()) return { ok: false, message: 'Owners cannot moderate other owners.' }; var set = {}; if (parsed.action === 'setrole') { if (!parsed.newRole) return { ok: false, message: 'Add a role: owner, admin, mod, member, or banned.' }; set.role = parsed.newRole; set.banned_until = parsed.newRole === 'banned' ? '2099-01-01T00:00:00.000Z' : null; if (parsed.newRole !== 'deleted') set.deleted_at = null; } else if (parsed.action === 'deleteuser') { var deletedRef = state.client.db.collection('deletedAccounts').doc(target.id); await deletedRef.set({ username: target.data.username || parsed.target, deleted_at: new Date().toISOString(), deleted_by: state.user.id }); try { await target.ref.delete(); } catch(deleteError) { try { await deletedRef.delete(); } catch(markerError) {} throw deleteError; } audit('command', '/' + parsed.action + ' ' + parsed.target); notifySaved('Command ran'); loadMembers(true); loadItems(); return { ok: true, message: 'Command ran: /' + parsed.action + ' ' + parsed.target }; } else if (parsed.action === 'ban') { set.role = 'banned'; set.banned_until = '2099-01-01T00:00:00.000Z'; set.deleted_at = null; } else if (parsed.action === 'unban') { set.role = 'member'; set.banned_until = null; set.deleted_at = null; } else if (parsed.action === 'warn') { set.warnings = (Number(target.data.warnings || 0) + 1); } else if (parsed.action === 'mute') { set.muted_until = new Date(Date.now() + (parsed.minutes || 10) * 60000).toISOString(); } else if (parsed.action === 'unmute') { set.muted_until = null; } else if (parsed.action === 'kick') { set.kicked_until = new Date(Date.now() + (parsed.minutes || 10) * 60000).toISOString(); } await target.ref.set(set, { merge: true }); if (parsed.action === 'unban') clearDeviceBan(parsed.target); audit('command', '/' + parsed.action + ' ' + parsed.target); notifySaved('Command ran'); loadMembers(true); loadItems(); return { ok: true, message: 'Command ran: /' + parsed.action + ' ' + parsed.target }; } catch(e) { return { ok: false, message: e.message }; } } if (mongoMode) { try { if (parsed.action === 'setrole') { if (!parsed.newRole) return { ok: false, message: 'Add a role: owner, admin, mod, member, or banned.' }; await mongoFetch('/staff/role', { method: 'POST', body: JSON.stringify({ username: parsed.target, role: parsed.newRole }) }); } else if (parsed.action === 'deleteuser') { await mongoFetch('/staff/delete-user', { method: 'POST', body: JSON.stringify({ username: parsed.target }) }); } else { await mongoFetch('/staff/moderate', { method: 'POST', body: JSON.stringify({ username: parsed.target, action: parsed.action, reason: parsed.reason || '', minutes: parsed.minutes || null }) }); } if (parsed.action === 'unban') { try { localStorage.removeItem('uzBannedAccount:' + String(parsed.target || '').toLowerCase()); } catch(e) {} } audit('command', '/' + parsed.action + ' ' + parsed.target); notifySaved('Command ran'); loadMembers(true); loadItems(); return { ok: true, message: 'Command ran: /' + parsed.action + ' ' + parsed.target }; } catch(e) { return { ok: false, message: e.message }; } } initClient(); var res; if (parsed.action === 'setrole') { if (!parsed.newRole) return { ok: false, message: 'Add a role: owner, admin, mod, member, or banned.' }; res = await state.client.rpc('set_user_role', { target_username: parsed.target, new_role: parsed.newRole }); } else if (parsed.action === 'deleteuser') { res = await state.client.rpc('delete_user_by_username', { target_username: parsed.target }); } else { res = await state.client.rpc('moderate_user', { target_username: parsed.target, action_name: parsed.action, reason_text: parsed.reason || '', duration_minutes: parsed.minutes || null }); } if (res.error) return { ok: false, message: res.error.message }; if (parsed.action === 'unban') { try { localStorage.removeItem('uzBannedAccount:' + String(parsed.target || '').toLowerCase()); } catch(e) {} } audit('command', '/' + parsed.action + ' ' + parsed.target); notifySaved('Command ran'); loadMembers(true); loadItems(); return { ok: true, message: 'Command ran: /' + parsed.action + ' ' + parsed.target }; }
   function warnBlockedInput(el, msg) { status(msg || 'Blocked word found. This will not send.'); if (el) { el.classList.remove('community-input-warn'); void el.offsetWidth; el.classList.add('community-input-warn'); el.focus(); } }
-  async function sendMessage() { if (!state.user) { status('Sign in first.'); return; } var input = $('community-chat-input'); if (!input) { status('Chat box is not ready.'); return; } var body = input.value.trim(); if (!body) return; if (hasBadWord(body)) { warnBlockedInput(input, 'Blocked word found. This message will not send.'); return; } if (firebaseMode) { try { var createdRef = await state.client.db.collection('messages').add({ user_id: state.user.id, username: profileUsername(), body: body, created_at: new Date().toISOString() }); input.value = ''; clearChatDraft(); audit('message', body.slice(0,80)); notifySaved('Message sent'); loadItems(); return createdRef; } catch(e) { status(e.message); } return; } if (mongoMode) { try { var mongoResult = await mongoFetch('/messages', { method: 'POST', body: JSON.stringify({ body: body }) }); input.value = ''; clearChatDraft(); audit('message', body.slice(0,80)); notifySaved('Message sent'); loadItems(); return mongoResult; } catch(e) { status(e.message); } return; } initClient(); var res = await state.client.from('chat_messages').insert({ user_id: state.user.id, body: body }); if (res.error) { status(res.error.message); return; } input.value = ''; clearChatDraft(); audit('message', body.slice(0,80)); notifySaved('Message sent'); loadItems(); return res.data; }
+  async function sendMessage() { if (!state.user) { status('Sign in first.'); return; } var input = $('community-chat-input'); if (!input) { status('Chat box is not ready.'); return; } var body = input.value.trim(); if (!body) return; if (hasBadWord(body)) { warnBlockedInput(input, 'Blocked word found. This message will not send.'); return; } if (firebaseMode) { try { var createdRef = await state.client.db.collection('messages').add({ user_id: state.user.id, username: profileUsername(), channel: state.channelName, body: body, created_at: new Date().toISOString() }); input.value = ''; clearChatDraft(); audit('message', body.slice(0,80)); notifySaved('Message sent'); loadItems(); return createdRef; } catch(e) { status(e.message); } return; } if (mongoMode) { try { var mongoResult = await mongoFetch('/messages', { method: 'POST', body: JSON.stringify({ body: body, channel: state.channelName }) }); input.value = ''; clearChatDraft(); audit('message', body.slice(0,80)); notifySaved('Message sent'); loadItems(); return mongoResult; } catch(e) { status(e.message); } return; } initClient(); var res = await state.client.from('chat_messages').insert({ user_id: state.user.id, body: body }); if (res.error) { status(res.error.message); return; } input.value = ''; clearChatDraft(); audit('message', body.slice(0,80)); notifySaved('Message sent'); loadItems(); return res.data; }
   function clearChatDraft() {
     if (state.user) sessionStorage.removeItem('uz-chat-draft:' + state.user.id + ':' + state.channelName);
   }
@@ -10883,7 +10888,7 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
     if (rejectRestrictedMention(body, input)) return;
     try {
       initClient();
-      var createdMessage = await createFirebaseItemWithAttachments('messages', { user_id: state.user.id, username: profileUsername(), body: body, created_at: new Date().toISOString() }, attachments);
+      var createdMessage = await createFirebaseItemWithAttachments('messages', { user_id: state.user.id, username: profileUsername(), channel: state.channelName, body: body, created_at: new Date().toISOString() }, attachments);
       notifyMentionedUsers(body, { tab: 'chat', channel: state.channelName, id: createdMessage && createdMessage.id }); state.pendingChatAttachments = []; state.replyTo = null; updateReplyPreview(); if (input) input.value = ''; clearChatDraft(); showAttachmentQueue('community-chat-file-choice', []); audit('message', body.slice(0,80)); notifySaved('Message sent'); state.jumpToLatest = true; loadItems();
     } catch (error) { status(error.message || 'Message could not be sent.'); }
   }
@@ -10941,7 +10946,7 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
     if (target.tab) setTab(target.tab, target.channel || (target.tab === 'chat' ? 'chat' : state.channelName));
     setTimeout(function(){ var selector = target.id ? '[data-message-id="' + String(target.id).replace(/"/g, '') + '"],[data-post-id="' + String(target.id).replace(/"/g, '') + '"],[data-announcement-id="' + String(target.id).replace(/"/g, '') + '"]' : ''; var found = selector ? document.querySelector(selector) : null; if (found) { found.scrollIntoView({ behavior: 'smooth', block: 'center' }); found.classList.add('community-notification-focus'); setTimeout(function(){ found.classList.remove('community-notification-focus'); }, 1800); } }, 220);
   });
-  window.UZCommunity = { saveProfile: saveProfile, updateProfile: updateProfileDetails, loadStaffLogs: loadStaffLogs, staffLogError: staffLogError, logHtmlDownload: logHtmlDownload, logout: logout, refresh: refreshSession, loadMembers: function(){ loadMembers(false); }, role: role, isStaff: isStaff, runCommand: runStaffCommandTextV2, renderAnnouncements: renderAnnouncementsPanel, scrollLatest: function(){ var list = $('community-list'); if (!list) return; state.jumpToLatest = true; requestAnimationFrame(function(){ list.scrollTop = list.scrollHeight; requestAnimationFrame(function(){ list.scrollTop = list.scrollHeight; state.jumpToLatest = false; updateChatNavigation(); }); }); }, openTerminal: function(){ if (window.openUZCommandPalette) window.openUZCommandPalette(); } };
+  window.UZCommunity = { saveProfile: saveProfile, updateProfile: updateProfileDetails, loadStaffLogs: loadStaffLogs, staffLogError: staffLogError, logHtmlDownload: logHtmlDownload, logout: logout, refresh: refreshSession, role: role, isStaff: isStaff, runCommand: runStaffCommandTextV2, renderAnnouncements: renderAnnouncementsPanel, scrollLatest: function(){ var list = $('community-list'); if (!list) return; state.jumpToLatest = true; requestAnimationFrame(function(){ list.scrollTop = list.scrollHeight; requestAnimationFrame(function(){ list.scrollTop = list.scrollHeight; state.jumpToLatest = false; updateChatNavigation(); }); }); }, openTerminal: function(){ if (window.openUZCommandPalette) window.openUZCommandPalette(); } };
   window.UZ_ACCOUNT_DEBUG.push('community-js-ready');
   window.initCommunity = function () { ensureCommunityTools(); Array.prototype.forEach.call(document.querySelectorAll('.community-tab'), function(btn){ btn.onclick = function(){ setTab(btn.dataset.communityTab, btn.dataset.communityChannel); }; }); renderChannelHeader(); refreshSession(); setTab('chat', 'chat'); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.initCommunity); else window.initCommunity();
@@ -10954,6 +10959,7 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
   window.UZ_ACCOUNT_DEBUG.push('auth-gate-start');
   var cfg = window.UZ_COMMUNITY_CONFIG || {};
   var client = null;
+  if (cfg.authProvider === 'firebase') cfg.mongoApiUrl = '';
   var mongoApiUrl = String(cfg.mongoApiUrl || '').replace(/\/$/, '');
   var mongoMode = cfg.authProvider === 'mongo' && !!mongoApiUrl;
   var firebaseMode = cfg.authProvider === 'firebase';
@@ -11451,8 +11457,8 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
     } catch(e) {}
     try {
       var link = document.getElementById('page-favicon') || document.querySelector('link[rel="icon"]') || document.createElement('link');
-      link.id = 'page-favicon'; link.rel = 'icon'; link.type = 'image/png';
-      link.href = 'logo.png';
+      link.id = 'page-favicon'; link.rel = 'icon'; link.type = 'image/svg+xml';
+      link.href = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(logoSvg().replace(' class="uz-logo-svg"', ''));
       if (!link.parentNode) document.head.appendChild(link);
     } catch(e) {}
   }
@@ -11688,7 +11694,6 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
     var switchButton = temporary ? '' : switchAccountsHtml(username);
     var deleteButton = temporary ? '' : '<button class="community-btn danger" id="uz-profile-delete">Delete account</button>';
     mount.innerHTML = '<button class="uz-profile-chip" id="uz-profile-toggle"><span class="uz-profile-avatar">' + (avatar ? '<img src="' + esc(avatar) + '" alt="">' : esc(name.charAt(0).toUpperCase() || 'P')) + '</span><span>' + esc(name) + '</span></button><div class="uz-profile-panel" id="uz-profile-panel"><label>Display name</label><input id="uz-profile-name" maxlength="24" value="' + esc(savedName) + '" placeholder="Choose a name"' + disabled + '><label>Image URL</label><input id="uz-profile-avatar" value="' + esc(avatar) + '" placeholder="https://..."' + disabled + '><label class="community-file-label">Upload profile image<input id="uz-profile-avatar-file" type="file" accept="image/*"' + disabled + '></label><span class="uz-profile-upload-note" id="uz-profile-upload-note">Images are resized before saving.</span><div class="community-row"><button class="community-btn" id="uz-profile-save"' + disabled + '>Save</button><button class="community-btn secondary" id="uz-profile-open" type="button">Expand profile settings</button><button class="community-btn secondary" id="uz-profile-logout">Log out</button></div>' + switchButton + passwordTools + deleteButton + readonlyNote + '<p>Account: <b>' + esc(username || 'Not signed in') + '</b></p><p>Role: <b>' + esc(owner ? 'owner' : 'member') + '</b></p></div>';
-    if (window.UZEnableBrowserLanguageHints) window.UZEnableBrowserLanguageHints(mount);
     document.getElementById('uz-profile-toggle').onclick = function () { document.getElementById('uz-profile-panel').classList.toggle('open'); };
     var openProfile = document.getElementById('uz-profile-open');
     if (openProfile) openProfile.onclick = function () { openProfileSettings(username, name, avatar, owner, temporary); };
