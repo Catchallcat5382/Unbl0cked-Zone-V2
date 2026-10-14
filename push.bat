@@ -111,8 +111,14 @@ if errorlevel 1 (
   goto :failed
 )
 
+powershell -NoProfile -ExecutionPolicy Bypass -File "tools\publish-cdn-branch.ps1"
+if errorlevel 1 (
+  echo Main was pushed, but the lightweight CDN branch failed to publish.
+  goto :failed
+)
+
 echo.
-echo Push completed successfully to %BRANCH%.
+echo Push completed successfully to %BRANCH% and the CDN branch.
 goto :done
 
 :git_error
