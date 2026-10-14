@@ -89,7 +89,7 @@ if errorlevel 1 (
   if errorlevel 1 goto :git_error
 
   for /f "delims=" %%H in ('git rev-parse --short HEAD') do set "BUILD_REVISION=%%H"
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "$utf8=New-Object System.Text.UTF8Encoding($false); $p=Join-Path $PWD 'unblocked zone v2.html'; $t=[IO.File]::ReadAllText($p); $t=[regex]::Replace($t, 'var buildRevision = ''[^'']+'';', 'var buildRevision = ''!BUILD_REVISION!'';', 1); [IO.File]::WriteAllText($p,$t,$utf8); $p=Join-Path $PWD 'assets\class.html'; $t=[IO.File]::ReadAllText($p); $t=[regex]::Replace($t, 'var _revision = "[^"]+";', 'var _revision = "!BUILD_REVISION!";', 1); [IO.File]::WriteAllText($p,$t,$utf8)"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "tools\pin-launchers.ps1" "!BUILD_REVISION!"
   if errorlevel 1 goto :git_error
   git add -- "unblocked zone v2.html" "assets/class.html"
   if errorlevel 1 goto :git_error
