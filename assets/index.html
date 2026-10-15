@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="vendor/firebase-app-compat.js"></script>
+  <script src="vendor/firebase-auth-compat.js"></script>
+  <script src="vendor/firebase-firestore-compat.js"></script>
   <!-- Account-scoped site settings: must run before other scripts touch localStorage -->
   <script>
     (function () {
@@ -18,7 +18,7 @@
         var rawSet = Storage.prototype.setItem;
         var rawRemove = Storage.prototype.removeItem;
         var rawKey = Storage.prototype.key;
-        var shared = /^(uzLoginEmail|uzRememberMe|uzRecentAccounts|uzSessionOk|uzSiteBanned|uzBannedAccount:|uzCommunityProfileName:|uzCommunityAvatar:|sb-|supabase\.|community\.|__|ownerBypassHash)/;
+        var shared = /^(uzLoginEmail|uzRememberMe|uzRecentAccounts|uzSessionOk|uzSiteShutdown|uzSiteBanned|uzBannedAccount:|uzCommunityProfileName:|uzCommunityAvatar:|sb-|supabase\.|community\.|__|ownerBypassHash)/;
         function user() { return String(rawGet.call(localStorage, 'uzLoginEmail') || '').toLowerCase().replace(/[^a-z0-9_.-]/g, '') || ''; }
         (function () {
           var existing = rawGet.call(localStorage, 'uzSiteBanned');
@@ -8159,8 +8159,8 @@ let DATA = {
       try { localStorage.removeItem('cloakPreset'); } catch(e) {}
       try { localStorage.removeItem('cloakCustomFavicon'); } catch(e) {}
       try { localStorage.removeItem('cloakCustomTitle'); } catch(e) {}
-      setFavicon('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQrl7Ft53D7V2jAAjOjb1NtowlYTCqorTe8uj0uiiqXww&s=10');
-      document.title = 'Google'; /// TESTTTTTTTTTTTTTTTTTTTTTTTT
+      setFavicon('logo.png');
+      document.title = 'New Tab';
       try { document.getElementById('cloak-preset').value = ''; } catch(e) {}
       try { document.getElementById('cloak-favicon-input').value = ''; } catch(e) {}
       try { document.getElementById('cloak-title-input').value = ''; } catch(e) {}
@@ -11151,7 +11151,7 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
       var profile = snap.exists ? snap.data() : null;
       if (!profile || !profile.settings || !Object.keys(profile.settings).length) throw new Error('No account settings have been uploaded yet.');
       window.UZCurrentProfile = Object.assign({}, window.UZCurrentProfile || {}, profile);
-      restoreAccountSettings(account.username, profile.settings);
+      restoreAccountSettings(account.username, profile.settings, false, true);
       renderProfile(firebaseProfileToSession(account.user, profile), profile);
       settingsSyncStatus('Loaded ' + Object.keys(profile.settings).length + ' account settings.');
     } catch (e) { settingsSyncStatus('Load failed: ' + (e.message || 'unknown error')); }
@@ -11230,7 +11230,7 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
       } catch (e) {}
     });
   }
-  function restoreAccountSettings(username, cloudSettings, repeated) {
+  function restoreAccountSettings(username, cloudSettings, repeated, forceCloud) {
     username = cleanUsername(username);
     if (!username) return;
     if (cloudSettings && Object.keys(cloudSettings).length && !localStorage.getItem(syncBackupKey(username))) {
@@ -11247,18 +11247,20 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
           && Object.prototype.hasOwnProperty.call(cloudSettings, key)
           && LOCAL_ONLY_SETTINGS.indexOf(key) === -1
           && (cloudSettings[key] === null || cloudSettingAllowed(key, cloudSettings[key]));
-        if (cloudHasValue && cloudSettings[key] === null) {
+        var localValue = localStorage.getItem(accountSettingKey(username, key));
+        var useCloud = cloudHasValue && (forceCloud || localValue === null);
+        if (useCloud && cloudSettings[key] === null) {
           localStorage.removeItem(accountSettingKey(username, key));
           localStorage.removeItem(key);
           return;
         }
-        var value = cloudHasValue ? String(cloudSettings[key]) : localStorage.getItem(accountSettingKey(username, key));
+        var value = useCloud ? String(cloudSettings[key]) : localValue;
         if (value === null && savedTheme && savedTheme[key] != null) value = String(savedTheme[key]);
         if (value === null) value = localStorage.getItem(key);
         if (value === null) return;
         localStorage.setItem(accountSettingKey(username, key), value);
         localStorage.setItem(key, value);
-        if (cloudHasValue && window.UZSaveThemeSetting) window.UZSaveThemeSetting(key, value);
+        if (useCloud && window.UZSaveThemeSetting) window.UZSaveThemeSetting(key, value);
       } catch (e) {}
     });
     window.__uzSettingsReady = true;
@@ -11340,8 +11342,15 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
   }
   async function setFirebasePersistence() {
     if (!firebaseMode || !client || !client.auth || !client.auth.setPersistence || !window.firebase || !window.firebase.auth || !window.firebase.auth.Auth) return;
-    var persistence = rememberWanted() ? window.firebase.auth.Auth.Persistence.LOCAL : window.firebase.auth.Auth.Persistence.SESSION;
-    await client.auth.setPersistence(persistence);
+    var modes = rememberWanted()
+      ? [window.firebase.auth.Auth.Persistence.LOCAL, window.firebase.auth.Auth.Persistence.SESSION, window.firebase.auth.Auth.Persistence.NONE]
+      : [window.firebase.auth.Auth.Persistence.SESSION, window.firebase.auth.Auth.Persistence.NONE];
+    var lastError = null;
+    for (var i = 0; i < modes.length; i++) {
+      try { await client.auth.setPersistence(modes[i]); debugLog('firebase-persistence', String(modes[i])); return; }
+      catch (error) { lastError = error; debugLog('firebase-persistence-fallback', error.message || String(error)); }
+    }
+    if (lastError) debugLog('firebase-persistence-unavailable', lastError.message || String(lastError));
   }
   function setLightspeed(name) {
     try {
@@ -11475,8 +11484,8 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
     } catch(e) {}
     try {
       var link = document.getElementById('page-favicon') || document.querySelector('link[rel="icon"]') || document.createElement('link');
-      link.id = 'page-favicon'; link.rel = 'icon'; link.type = 'image/svg+xml';
-      link.href = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(logoSvg().replace(' class="uz-logo-svg"', ''));
+      link.id = 'page-favicon'; link.rel = 'icon'; link.type = 'image/png';
+      link.href = 'logo.png';
       if (!link.parentNode) document.head.appendChild(link);
     } catch(e) {}
   }
@@ -12129,6 +12138,7 @@ async function check() { if (authTransition) return; if (isTempOwner()) { setLig
     return !!(home && home.classList.contains('active') && !(viewer && viewer.classList.contains('active')) && !document.body.classList.contains('uz-auth-locked'));
   }
   function shutdownPage() {
+    try { localStorage.setItem('uzSiteShutdown', '1'); } catch(e) {}
     document.body.classList.add('uz-site-shutdown');
     var page = document.getElementById('uz-site-shutdown-page');
     if (!page) {
@@ -12258,6 +12268,7 @@ async function check() { if (authTransition) return; if (isTempOwner()) { setLig
     if (/^[0-9a-z]$/i.test(k) || k.indexOf('Arrow') === 0) flashSecret(false);
     keyIndex = k === code[0] ? (flashSecret(true), 1) : 0;
   }, true);
+  try { if (localStorage.getItem('uzSiteShutdown') === '1') { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', shutdownPage); else shutdownPage(); } } catch(e) {}
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchShutdown); else watchShutdown();
   setTimeout(watchShutdown, 1200);
 })();
