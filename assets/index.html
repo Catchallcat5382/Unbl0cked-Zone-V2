@@ -18,7 +18,7 @@
         var rawSet = Storage.prototype.setItem;
         var rawRemove = Storage.prototype.removeItem;
         var rawKey = Storage.prototype.key;
-        var shared = /^(uzLoginEmail|uzRememberMe|uzRecentAccounts|uzSessionOk|uzSiteShutdown|uzSiteBanned|uzBannedAccount:|uzCommunityProfileName:|uzCommunityAvatar:|sb-|supabase\.|community\.|__|ownerBypassHash)/;
+        var shared = /^(uzLoginEmail|uzRememberMe|uzRecentAccounts|uzSessionOk|uzSiteBanned|uzBannedAccount:|uzCommunityProfileName:|uzCommunityAvatar:|sb-|supabase\.|community\.|__|ownerBypassHash)/;
         function user() { return String(rawGet.call(localStorage, 'uzLoginEmail') || '').toLowerCase().replace(/[^a-z0-9_.-]/g, '') || ''; }
         (function () {
           var existing = rawGet.call(localStorage, 'uzSiteBanned');
@@ -9751,8 +9751,10 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
     return changed;
   }
   function subscribeMembers() {
-    if (!firebaseMode || !state.user || !state.client || !firebaseAvailable()) return;
-    if (state.membersRealtime && state.membersUserId === state.user.id) return;
+    if (!firebaseMode) return false;
+    if (!state.user) { renderMembersStatus('Sign in to see members.'); return false; }
+    if (!state.client || !firebaseAvailable()) { renderMembersStatus('Members are temporarily unavailable.'); return false; }
+    if (state.membersRealtime && state.membersUserId === state.user.id) return true;
     if (typeof state.membersRealtime === 'function') state.membersRealtime();
     state.membersUserId = state.user.id;
     state.membersRealtime = state.client.db.collection('profiles').limit(200).onSnapshot(function(snapshot){
@@ -9760,7 +9762,14 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
       state.membersLoaded = true;
       renderCachedMembers(state.tab === 'members');
       if (state.tab === 'chat' || state.tab === 'posts') loadItems();
-    }, function(error){ state.membersRealtime = null; firebaseCooldown(error); });
+    }, function(error){
+      state.membersRealtime = null;
+      state.membersUserId = null;
+      state.membersLoaded = false;
+      renderMembersStatus((error && error.message) || 'Members could not be loaded.');
+      firebaseCooldown(error);
+    });
+    return true;
   }
   function subscribeOwnProfile() {
     if (firebaseMode) {
@@ -10544,17 +10553,23 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
   function renderCachedMembers(main) {
     var html = renderMembers(state.memberRows, main);
     if (main && $('community-list')) $('community-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
+    if ($('partners-members-list')) $('partners-members-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
     var side = $('community-side-members'); if (side) side.innerHTML = renderMembers(state.memberRows, false);
     wireMemberActions(); wireProfileLinks();
   }
+  function renderMembersStatus(message) {
+    var html = '<div class="community-message community-locked">' + esc(message) + '</div>';
+    if (state.tab === 'members' && $('community-list')) $('community-list').innerHTML = html;
+    if ($('partners-members-list')) $('partners-members-list').innerHTML = html;
+  }
   async function loadMembers(main) {
-    if (!ready) return;
+    if (!ready) { renderMembersStatus('Members are temporarily unavailable.'); return; }
     if (firebaseMode) {
       try {
         initClient();
         subscribeMembers();
-        renderCachedMembers(main);
-      } catch(e) { if (main && $('community-list')) $('community-list').innerHTML = '<div class="community-message community-locked">' + esc(e.message) + '</div>'; }
+        if (state.membersLoaded || state.memberRows.length) renderCachedMembers(main);
+      } catch(e) { renderMembersStatus(e.message); }
       return;
     }
     if (mongoMode) {
@@ -10563,18 +10578,20 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
         state.memberRows = (data.members || []).map(fromMongoUser).filter(function(profile){ return !isDeleted(profile); });
         var html = renderMembers(state.memberRows, main);
         if (main && $('community-list')) $('community-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
+        if ($('partners-members-list')) $('partners-members-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
         var side = $('community-side-members'); if (side) side.innerHTML = renderMembers(state.memberRows, false);
         wireMemberActions(); wireProfileLinks();
-      } catch(e) { if (main && $('community-list')) $('community-list').innerHTML = '<div class="community-message community-locked">' + esc(e.message) + '</div>'; }
+      } catch(e) { renderMembersStatus(e.message); }
       return;
     }
     initClient();
     var res = await state.client.from('profiles').select(profileFields()).order('role', { ascending: false }).limit(200);
     if (res.error && handleProfileError(res.error)) { res = await state.client.from('profiles').select(profileFields()).order('role', { ascending: false }).limit(200); }
-    if (res.error) { if (main && $('community-list')) $('community-list').innerHTML = '<div class="community-message community-locked">' + esc(res.error.message) + '</div>'; return; }
+    if (res.error) { renderMembersStatus(res.error.message); return; }
     state.memberRows = (res.data || []).filter(function(profile){ return !isDeleted(profile); });
     var html = renderMembers(state.memberRows, main);
     if (main && $('community-list')) $('community-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
+    if ($('partners-members-list')) $('partners-members-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
     var side = $('community-side-members'); if (side) side.innerHTML = renderMembers(state.memberRows, false);
     wireMemberActions(); wireProfileLinks();
   }
@@ -10964,7 +10981,7 @@ window.UZ_ACCOUNT_DEBUG.push('config-loaded:firebase');
     if (target.tab) setTab(target.tab, target.channel || (target.tab === 'chat' ? 'chat' : state.channelName));
     setTimeout(function(){ var selector = target.id ? '[data-message-id="' + String(target.id).replace(/"/g, '') + '"],[data-post-id="' + String(target.id).replace(/"/g, '') + '"],[data-announcement-id="' + String(target.id).replace(/"/g, '') + '"]' : ''; var found = selector ? document.querySelector(selector) : null; if (found) { found.scrollIntoView({ behavior: 'smooth', block: 'center' }); found.classList.add('community-notification-focus'); setTimeout(function(){ found.classList.remove('community-notification-focus'); }, 1800); } }, 220);
   });
-  window.UZCommunity = { saveProfile: saveProfile, updateProfile: updateProfileDetails, loadStaffLogs: loadStaffLogs, staffLogError: staffLogError, logHtmlDownload: logHtmlDownload, logout: logout, refresh: refreshSession, role: role, isStaff: isStaff, runCommand: runStaffCommandTextV2, renderAnnouncements: renderAnnouncementsPanel, scrollLatest: function(){ var list = $('community-list'); if (!list) return; state.jumpToLatest = true; requestAnimationFrame(function(){ list.scrollTop = list.scrollHeight; requestAnimationFrame(function(){ list.scrollTop = list.scrollHeight; state.jumpToLatest = false; updateChatNavigation(); }); }); }, openTerminal: function(){ if (window.openUZCommandPalette) window.openUZCommandPalette(); } };
+  window.UZCommunity = { saveProfile: saveProfile, updateProfile: updateProfileDetails, loadStaffLogs: loadStaffLogs, staffLogError: staffLogError, logHtmlDownload: logHtmlDownload, logout: logout, refresh: refreshSession, loadMembers: function(){ loadMembers(false); }, role: role, isStaff: isStaff, runCommand: runStaffCommandTextV2, renderAnnouncements: renderAnnouncementsPanel, scrollLatest: function(){ var list = $('community-list'); if (!list) return; state.jumpToLatest = true; requestAnimationFrame(function(){ list.scrollTop = list.scrollHeight; requestAnimationFrame(function(){ list.scrollTop = list.scrollHeight; state.jumpToLatest = false; updateChatNavigation(); }); }); }, openTerminal: function(){ if (window.openUZCommandPalette) window.openUZCommandPalette(); } };
   window.UZ_ACCOUNT_DEBUG.push('community-js-ready');
   window.initCommunity = function () { ensureCommunityTools(); Array.prototype.forEach.call(document.querySelectorAll('.community-tab'), function(btn){ btn.onclick = function(){ setTab(btn.dataset.communityTab, btn.dataset.communityChannel); }; }); renderChannelHeader(); refreshSession(); setTab('chat', 'chat'); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.initCommunity); else window.initCommunity();
@@ -12107,171 +12124,6 @@ async function check() { if (authTransition) return; if (isTempOwner()) { setLig
 })();
 </script>
 
-<script>
-(function(){
-  var cfg = window.UZ_COMMUNITY_CONFIG || {};
-  var code = ['ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowDown','ArrowDown'];
-  var keyIndex = 0;
-  var deadline = 0;
-  var timer = null;
-  var db = null;
-  var unsubs = [];
-  var fallbackWatching = false;
-  function style() {
-    if (document.getElementById('uz-shutdown-style')) return;
-    var s = document.createElement('style');
-    s.id = 'uz-shutdown-style';
-    s.textContent = '#uz-shutdown-timer{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:1000002;padding:8px 14px;border:1px solid #ff3b1f;border-radius:999px;background:rgba(8,0,0,.88);color:#fff;font:900 13px Arial,sans-serif;box-shadow:0 0 22px rgba(255,59,31,.45);letter-spacing:.08em}#uz-shutdown-pad{position:fixed;inset:0;z-index:1000001;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:min(8vw,72px);padding:min(12vw,110px);background:radial-gradient(circle at 50% 50%,rgba(255,60,24,.18),rgba(0,0,0,.92) 58%,#000);animation:uzShutdownFade .22s ease both}#uz-shutdown-pad button{border:2px solid rgba(255,95,45,.85);border-radius:18px;background:linear-gradient(180deg,rgba(255,100,32,.24),rgba(50,0,0,.7));color:#fff;font:900 clamp(18px,5vw,42px) Arial,sans-serif;box-shadow:0 0 28px rgba(255,68,22,.28),inset 0 0 18px rgba(255,255,255,.08);cursor:pointer;transform:scale(.96);transition:transform .16s ease,box-shadow .16s ease,background .16s ease}#uz-shutdown-pad button:hover,#uz-shutdown-pad button.hit{transform:scale(1.02);box-shadow:0 0 44px rgba(255,82,32,.58),inset 0 0 24px rgba(255,255,255,.13);background:linear-gradient(180deg,rgba(255,128,54,.38),rgba(80,0,0,.75))}#uz-shutdown-arrows{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:1000002;color:#fff;background:rgba(0,0,0,.82);border:1px solid rgba(255,95,45,.65);border-radius:12px;padding:12px 16px;font:900 14px Arial,sans-serif;box-shadow:0 0 28px rgba(255,68,22,.28);animation:uzShutdownPop .2s ease both}#uz-shutdown-modal{position:fixed;inset:0;z-index:1000003;display:grid;place-items:center;background:rgba(0,0,0,.82);animation:uzShutdownFade .18s ease both}#uz-shutdown-card{width:min(430px,calc(100vw - 34px));max-height:calc(100vh - 32px);overflow:auto;box-sizing:border-box;border:1px solid #ff4f22;border-radius:16px;background:#120403;color:#fff;padding:22px;box-shadow:0 0 50px rgba(255,68,22,.35);font-family:Arial,sans-serif;animation:uzShutdownCardPop .2s ease both}#uz-shutdown-card h2{margin:0 0 10px;color:#ff7348}#uz-shutdown-card p{color:#ffd5c9;line-height:1.4}#uz-shutdown-card input{width:100%;box-sizing:border-box;margin:8px 0 14px;padding:11px;border:1px solid #ff6a35;border-radius:8px;background:#050202;color:#fff;font:900 18px Arial,sans-serif;text-align:center;letter-spacing:.18em}#uz-shutdown-card .row{display:flex;gap:10px;justify-content:flex-end}#uz-shutdown-card button{border:1px solid #ff6a35;border-radius:8px;background:#220805;color:#ffd5c9;padding:10px 14px;font-weight:900;cursor:pointer}#uz-shutdown-card button.yes{background:#ff4b24;color:#fff}body.uz-site-shutdown>*:not(#uz-site-shutdown-page){display:none!important}#uz-site-shutdown-page{position:fixed;inset:0;z-index:2147483647;display:block!important;background:#fff;color:#000;font-family:Times New Roman,serif;padding:22px 8px}#uz-site-shutdown-page h1{font-size:32px;margin:0 0 22px;font-weight:700}#uz-site-shutdown-page p{font-size:16px;margin:0}#uz-shutdown-flash{position:fixed;inset:0;z-index:1000004;pointer-events:none;opacity:0;transition:opacity .18s ease}#uz-shutdown-flash.good{background:rgba(0,255,120,.24);opacity:1}#uz-shutdown-flash.bad{background:rgba(255,0,42,.28);opacity:1}@keyframes uzShutdownFade{from{opacity:0}to{opacity:1}}@keyframes uzShutdownPop{from{opacity:0;transform:translateX(-50%) scale(.94)}to{opacity:1;transform:translateX(-50%) scale(1)}}@keyframes uzShutdownCardPop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}';
-    document.head.appendChild(s);
-  }
-  function flashSecret(ok) {
-    style();
-    var el = document.getElementById('uz-shutdown-flash');
-    if (!el) { el = document.createElement('div'); el.id = 'uz-shutdown-flash'; document.body.appendChild(el); }
-    el.className = ok ? 'good' : 'bad';
-    clearTimeout(el._t);
-    el._t = setTimeout(function(){ el.className = ''; }, 120);
-  }
-  function onHome() {
-    var home = document.getElementById('home');
-    var viewer = document.getElementById('g4mes-viewer');
-    return !!(home && home.classList.contains('active') && !(viewer && viewer.classList.contains('active')) && !document.body.classList.contains('uz-auth-locked'));
-  }
-  function shutdownPage() {
-    try { localStorage.setItem('uzSiteShutdown', '1'); } catch(e) {}
-    document.body.classList.add('uz-site-shutdown');
-    var page = document.getElementById('uz-site-shutdown-page');
-    if (!page) {
-      page = document.createElement('div');
-      page.id = 'uz-site-shutdown-page';
-      page.innerHTML = '<h1>Error 404</h1><p>Page Not Found</p>';
-      document.body.appendChild(page);
-    }
-  }
-  function getDb() {
-    if (db) return db;
-    if (!cfg.firebaseConfig || !window.firebase || !window.firebase.firestore) return null;
-    try { if (!window.firebase.apps.length) window.firebase.initializeApp(cfg.firebaseConfig); db = window.firebase.firestore(); return db; } catch(e) { return null; }
-  }
-  function watchFallbackShutdown(store) {
-    if (fallbackWatching || !window.firebase || !window.firebase.auth || !window.firebase.auth().currentUser) return;
-    fallbackWatching = true;
-    try {
-      unsubs.push(store.collection('posts').where('title', '==', '[site-control] shutdown').limit(1).onSnapshot(function(snapshot){
-        snapshot.forEach(function(doc){ var data = doc.data() || {}; if (data.enabled !== false) shutdownPage(); });
-      }, function(){ fallbackWatching = false; }));
-    } catch(e) { fallbackWatching = false; }
-  }
-  function watchShutdown() {
-    var store = getDb();
-    if (!store || unsubs.length) return;
-    try {
-      unsubs.push(store.collection('siteControl').doc('shutdown').onSnapshot(function(doc){
-        var data = doc && doc.exists ? doc.data() : null;
-        if (data && data.enabled) shutdownPage();
-      }, function(){ watchFallbackShutdown(store); }));
-    } catch(e) {}
-    try {
-      var auth = window.firebase.auth();
-      unsubs.push(auth.onAuthStateChanged(function(user){ if (user) watchFallbackShutdown(store); }));
-      if (auth.currentUser) watchFallbackShutdown(store);
-    } catch(e) {}
-  }
-  function setTimer(seconds) {
-    clearInterval(timer);
-    deadline = Date.now() + seconds * 1000;
-    var el = document.getElementById('uz-shutdown-timer');
-    if (!el) { el = document.createElement('div'); el.id = 'uz-shutdown-timer'; document.body.appendChild(el); }
-    function tick() {
-      var left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-      el.textContent = 'SHUTDOWN WINDOW ' + left + 'S';
-      if (left <= 0) resetSequence();
-    }
-    tick(); timer = setInterval(tick, 250);
-  }
-  function resetSequence() {
-    keyIndex = 0; clearInterval(timer); timer = null;
-    ['uz-shutdown-timer','uz-shutdown-pad','uz-shutdown-arrows','uz-shutdown-modal'].forEach(function(id){ var el = document.getElementById(id); if (el) el.remove(); });
-  }
-  function showPad() {
-    style(); setTimer(20);
-    var old = document.getElementById('uz-shutdown-pad'); if (old) old.remove();
-    var pad = document.createElement('div'); pad.id = 'uz-shutdown-pad';
-    [['tl','TOP LEFT'],['tr','TOP RIGHT'],['bl','BOTTOM LEFT'],['br','BOTTOM RIGHT']].forEach(function(item){ var b = document.createElement('button'); b.type = 'button'; b.dataset.pos = item[0]; b.textContent = item[1]; pad.appendChild(b); });
-    document.body.appendChild(pad);
-    var order = ['bl','tr','tl','br']; var i = 0;
-    pad.addEventListener('click', function(e){
-      var b = e.target && e.target.closest ? e.target.closest('button[data-pos]') : null;
-      if (!b) return;
-      if (Date.now() > deadline || b.dataset.pos !== order[i]) { resetSequence(); return; }
-      b.classList.add('hit'); i++;
-      if (i === order.length) { pad.remove(); showArrowStage(); }
-    });
-  }
-  function showArrowStage() {
-    arrowIndex = 0; setTimer(15);
-    var note = document.createElement('div'); note.id = 'uz-shutdown-arrows'; note.textContent = 'ENTER: UP DOWN LEFT UP DOWN LEFT UP DOWN'; document.body.appendChild(note);
-  }
-  function showConfirm() {
-    clearInterval(timer);
-    var timerEl = document.getElementById('uz-shutdown-timer'); if (timerEl) timerEl.textContent = 'FINAL CONFIRMATION';
-    var note = document.getElementById('uz-shutdown-arrows'); if (note) note.remove();
-    var modal = document.createElement('div'); modal.id = 'uz-shutdown-modal';
-    modal.innerHTML = '<div id="uz-shutdown-card"><h2>Are you sure you want to shutdown?</h2><p>This will push the live shutdown flag and force everyone to the 404 page.</p><input id="uz-shutdown-pin" inputmode="numeric" autocomplete="off" placeholder="Enter shutdown PIN"><div class="row"><button type="button" id="uz-shutdown-no">No</button><button type="button" class="yes" id="uz-shutdown-yes">Yes</button></div><p id="uz-shutdown-status"></p></div>';
-    document.body.appendChild(modal);
-    var input = document.getElementById('uz-shutdown-pin'); input.focus();
-    document.getElementById('uz-shutdown-no').onclick = resetSequence;
-    document.getElementById('uz-shutdown-yes').onclick = activateShutdown;
-    input.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); activateShutdown(); } if (e.key === 'Escape') resetSequence(); });
-  }
-  async function activateShutdown() {
-    var status = document.getElementById('uz-shutdown-status');
-    var pin = document.getElementById('uz-shutdown-pin');
-    if (!pin || pin.value !== '112312') { if (status) status.textContent = 'Wrong code.'; flashSecret(false); return; }
-    var store = getDb();
-    if (!store) { if (status) status.textContent = 'Firebase is not ready.'; return; }
-    if (status) status.textContent = 'Shutting down...';
-    var now = new Date().toISOString();
-    try {
-      await store.collection('siteControl').doc('shutdown').set({ enabled: true, updated_at: now, by: localStorage.getItem('uzLoginEmail') || 'secret-sequence' }, { merge: true });
-      shutdownPage();
-    } catch(primaryError) {
-      try {
-        var auth = window.firebase && window.firebase.auth ? window.firebase.auth() : null;
-        var user = auth && auth.currentUser;
-        if (!user) throw new Error('Sign in before using shutdown.');
-        await store.collection('posts').add({ user_id: user.uid, username: (user.email || 'owner').split('@')[0], title: '[site-control] shutdown', body: 'shutdown', enabled: true, created_at: now, updated_at: now });
-        shutdownPage();
-      } catch(fallbackError) {
-        if (status) status.textContent = 'Shutdown could not be saved: ' + (fallbackError && fallbackError.message ? fallbackError.message : fallbackError);
-      }
-    }
-  }
-  document.addEventListener('keydown', function(e){
-    var tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '';
-    if (tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target && e.target.isContentEditable)) return;
-    if (!onHome()) { keyIndex = 0; return; }
-    var k = String(e.key || '');
-    if (k.length === 1) k = k.toLowerCase();
-    if (k === code[keyIndex]) {
-      flashSecret(true);
-      keyIndex++;
-      if (keyIndex === code.length) {
-        keyIndex = 0;
-        style();
-        setTimer(15);
-        showConfirm();
-        e.preventDefault();
-      }
-      return;
-    }
-    if (/^[0-9a-z]$/i.test(k) || k.indexOf('Arrow') === 0) flashSecret(false);
-    keyIndex = k === code[0] ? (flashSecret(true), 1) : 0;
-  }, true);
-  try { if (localStorage.getItem('uzSiteShutdown') === '1') { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', shutdownPage); else shutdownPage(); } } catch(e) {}
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchShutdown); else watchShutdown();
-  setTimeout(watchShutdown, 1200);
-})();
-</script>
+
 </body>
 </html>
