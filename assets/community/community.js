@@ -160,8 +160,10 @@
     return changed;
   }
   function subscribeMembers() {
-    if (!firebaseMode || !state.user || !state.client || !firebaseAvailable()) return;
-    if (state.membersRealtime && state.membersUserId === state.user.id) return;
+    if (!firebaseMode) return false;
+    if (!state.user) { renderMembersStatus('Sign in to see members.'); return false; }
+    if (!state.client || !firebaseAvailable()) { renderMembersStatus('Members are temporarily unavailable.'); return false; }
+    if (state.membersRealtime && state.membersUserId === state.user.id) return true;
     if (typeof state.membersRealtime === 'function') state.membersRealtime();
     state.membersUserId = state.user.id;
     state.membersRealtime = state.client.db.collection('profiles').limit(200).onSnapshot(function(snapshot){
@@ -169,7 +171,14 @@
       state.membersLoaded = true;
       renderCachedMembers(state.tab === 'members');
       if (state.tab === 'chat' || state.tab === 'posts') loadItems();
-    }, function(error){ state.membersRealtime = null; firebaseCooldown(error); });
+    }, function(error){
+      state.membersRealtime = null;
+      state.membersUserId = null;
+      state.membersLoaded = false;
+      renderMembersStatus((error && error.message) || 'Members could not be loaded.');
+      firebaseCooldown(error);
+    });
+    return true;
   }
   function subscribeOwnProfile() {
     if (firebaseMode) {
@@ -953,17 +962,23 @@
   function renderCachedMembers(main) {
     var html = renderMembers(state.memberRows, main);
     if (main && $('community-list')) $('community-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
+    if ($('partners-members-list')) $('partners-members-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
     var side = $('community-side-members'); if (side) side.innerHTML = renderMembers(state.memberRows, false);
     wireMemberActions(); wireProfileLinks();
   }
+  function renderMembersStatus(message) {
+    var html = '<div class="community-message community-locked">' + esc(message) + '</div>';
+    if (state.tab === 'members' && $('community-list')) $('community-list').innerHTML = html;
+    if ($('partners-members-list')) $('partners-members-list').innerHTML = html;
+  }
   async function loadMembers(main) {
-    if (!ready) return;
+    if (!ready) { renderMembersStatus('Members are temporarily unavailable.'); return; }
     if (firebaseMode) {
       try {
         initClient();
         subscribeMembers();
-        renderCachedMembers(main);
-      } catch(e) { if (main && $('community-list')) $('community-list').innerHTML = '<div class="community-message community-locked">' + esc(e.message) + '</div>'; }
+        if (state.membersLoaded || state.memberRows.length) renderCachedMembers(main);
+      } catch(e) { renderMembersStatus(e.message); }
       return;
     }
     if (mongoMode) {
@@ -972,18 +987,20 @@
         state.memberRows = (data.members || []).map(fromMongoUser).filter(function(profile){ return !isDeleted(profile); });
         var html = renderMembers(state.memberRows, main);
         if (main && $('community-list')) $('community-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
+        if ($('partners-members-list')) $('partners-members-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
         var side = $('community-side-members'); if (side) side.innerHTML = renderMembers(state.memberRows, false);
         wireMemberActions(); wireProfileLinks();
-      } catch(e) { if (main && $('community-list')) $('community-list').innerHTML = '<div class="community-message community-locked">' + esc(e.message) + '</div>'; }
+      } catch(e) { renderMembersStatus(e.message); }
       return;
     }
     initClient();
     var res = await state.client.from('profiles').select(profileFields()).order('role', { ascending: false }).limit(200);
     if (res.error && handleProfileError(res.error)) { res = await state.client.from('profiles').select(profileFields()).order('role', { ascending: false }).limit(200); }
-    if (res.error) { if (main && $('community-list')) $('community-list').innerHTML = '<div class="community-message community-locked">' + esc(res.error.message) + '</div>'; return; }
+    if (res.error) { renderMembersStatus(res.error.message); return; }
     state.memberRows = (res.data || []).filter(function(profile){ return !isDeleted(profile); });
     var html = renderMembers(state.memberRows, main);
     if (main && $('community-list')) $('community-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
+    if ($('partners-members-list')) $('partners-members-list').innerHTML = html || '<div class="community-message">No members yet.</div>';
     var side = $('community-side-members'); if (side) side.innerHTML = renderMembers(state.memberRows, false);
     wireMemberActions(); wireProfileLinks();
   }
@@ -1373,7 +1390,7 @@
     if (target.tab) setTab(target.tab, target.channel || (target.tab === 'chat' ? 'chat' : state.channelName));
     setTimeout(function(){ var selector = target.id ? '[data-message-id="' + String(target.id).replace(/"/g, '') + '"],[data-post-id="' + String(target.id).replace(/"/g, '') + '"],[data-announcement-id="' + String(target.id).replace(/"/g, '') + '"]' : ''; var found = selector ? document.querySelector(selector) : null; if (found) { found.scrollIntoView({ behavior: 'smooth', block: 'center' }); found.classList.add('community-notification-focus'); setTimeout(function(){ found.classList.remove('community-notification-focus'); }, 1800); } }, 220);
   });
-  window.UZCommunity = { saveProfile: saveProfile, updateProfile: updateProfileDetails, loadStaffLogs: loadStaffLogs, staffLogError: staffLogError, logHtmlDownload: logHtmlDownload, logout: logout, refresh: refreshSession, role: role, isStaff: isStaff, runCommand: runStaffCommandTextV2, renderAnnouncements: renderAnnouncementsPanel, scrollLatest: function(){ var list = $('community-list'); if (!list) return; state.jumpToLatest = true; requestAnimationFrame(function(){ list.scrollTop = list.scrollHeight; requestAnimationFrame(function(){ list.scrollTop = list.scrollHeight; state.jumpToLatest = false; updateChatNavigation(); }); }); }, openTerminal: function(){ if (window.openUZCommandPalette) window.openUZCommandPalette(); } };
+  window.UZCommunity = { saveProfile: saveProfile, updateProfile: updateProfileDetails, loadStaffLogs: loadStaffLogs, staffLogError: staffLogError, logHtmlDownload: logHtmlDownload, logout: logout, refresh: refreshSession, loadMembers: function(){ loadMembers(false); }, role: role, isStaff: isStaff, runCommand: runStaffCommandTextV2, renderAnnouncements: renderAnnouncementsPanel, scrollLatest: function(){ var list = $('community-list'); if (!list) return; state.jumpToLatest = true; requestAnimationFrame(function(){ list.scrollTop = list.scrollHeight; requestAnimationFrame(function(){ list.scrollTop = list.scrollHeight; state.jumpToLatest = false; updateChatNavigation(); }); }); }, openTerminal: function(){ if (window.openUZCommandPalette) window.openUZCommandPalette(); } };
   window.UZ_ACCOUNT_DEBUG.push('community-js-ready');
   window.initCommunity = function () { ensureCommunityTools(); Array.prototype.forEach.call(document.querySelectorAll('.community-tab'), function(btn){ btn.onclick = function(){ setTab(btn.dataset.communityTab, btn.dataset.communityChannel); }; }); renderChannelHeader(); refreshSession(); setTab('chat', 'chat'); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.initCommunity); else window.initCommunity();
