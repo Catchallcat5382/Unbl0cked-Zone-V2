@@ -72,6 +72,9 @@ if exist ".env" (
   )
 )
 
+powershell -NoProfile -ExecutionPolicy Bypass -File "tools\build-inline.ps1"
+if errorlevel 1 goto :git_error
+
 echo.
 echo Files Git sees in this folder:
 git status --short

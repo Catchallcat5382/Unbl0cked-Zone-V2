@@ -12,7 +12,10 @@ $paths = @(
   'assets/community/config.js',
   'assets/community/community.js',
   'assets/community/auth-gate.js',
-  'assets/logo.png'
+  'assets/logo.png',
+  'assets/vendor/firebase-app-compat.js',
+  'assets/vendor/firebase-auth-compat.js',
+  'assets/vendor/firebase-firestore-compat.js'
 )
 
 Push-Location $root

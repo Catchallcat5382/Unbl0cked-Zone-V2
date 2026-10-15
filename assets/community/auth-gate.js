@@ -177,7 +177,7 @@
       var profile = snap.exists ? snap.data() : null;
       if (!profile || !profile.settings || !Object.keys(profile.settings).length) throw new Error('No account settings have been uploaded yet.');
       window.UZCurrentProfile = Object.assign({}, window.UZCurrentProfile || {}, profile);
-      restoreAccountSettings(account.username, profile.settings);
+      restoreAccountSettings(account.username, profile.settings, false, true);
       renderProfile(firebaseProfileToSession(account.user, profile), profile);
       settingsSyncStatus('Loaded ' + Object.keys(profile.settings).length + ' account settings.');
     } catch (e) { settingsSyncStatus('Load failed: ' + (e.message || 'unknown error')); }
@@ -256,7 +256,7 @@
       } catch (e) {}
     });
   }
-  function restoreAccountSettings(username, cloudSettings, repeated) {
+  function restoreAccountSettings(username, cloudSettings, repeated, forceCloud) {
     username = cleanUsername(username);
     if (!username) return;
     if (cloudSettings && Object.keys(cloudSettings).length && !localStorage.getItem(syncBackupKey(username))) {
@@ -273,18 +273,20 @@
           && Object.prototype.hasOwnProperty.call(cloudSettings, key)
           && LOCAL_ONLY_SETTINGS.indexOf(key) === -1
           && (cloudSettings[key] === null || cloudSettingAllowed(key, cloudSettings[key]));
-        if (cloudHasValue && cloudSettings[key] === null) {
+        var localValue = localStorage.getItem(accountSettingKey(username, key));
+        var useCloud = cloudHasValue && (forceCloud || localValue === null);
+        if (useCloud && cloudSettings[key] === null) {
           localStorage.removeItem(accountSettingKey(username, key));
           localStorage.removeItem(key);
           return;
         }
-        var value = cloudHasValue ? String(cloudSettings[key]) : localStorage.getItem(accountSettingKey(username, key));
+        var value = useCloud ? String(cloudSettings[key]) : localValue;
         if (value === null && savedTheme && savedTheme[key] != null) value = String(savedTheme[key]);
         if (value === null) value = localStorage.getItem(key);
         if (value === null) return;
         localStorage.setItem(accountSettingKey(username, key), value);
         localStorage.setItem(key, value);
-        if (cloudHasValue && window.UZSaveThemeSetting) window.UZSaveThemeSetting(key, value);
+        if (useCloud && window.UZSaveThemeSetting) window.UZSaveThemeSetting(key, value);
       } catch (e) {}
     });
     window.__uzSettingsReady = true;
@@ -366,8 +368,15 @@
   }
   async function setFirebasePersistence() {
     if (!firebaseMode || !client || !client.auth || !client.auth.setPersistence || !window.firebase || !window.firebase.auth || !window.firebase.auth.Auth) return;
-    var persistence = rememberWanted() ? window.firebase.auth.Auth.Persistence.LOCAL : window.firebase.auth.Auth.Persistence.SESSION;
-    await client.auth.setPersistence(persistence);
+    var modes = rememberWanted()
+      ? [window.firebase.auth.Auth.Persistence.LOCAL, window.firebase.auth.Auth.Persistence.SESSION, window.firebase.auth.Auth.Persistence.NONE]
+      : [window.firebase.auth.Auth.Persistence.SESSION, window.firebase.auth.Auth.Persistence.NONE];
+    var lastError = null;
+    for (var i = 0; i < modes.length; i++) {
+      try { await client.auth.setPersistence(modes[i]); debugLog('firebase-persistence', String(modes[i])); return; }
+      catch (error) { lastError = error; debugLog('firebase-persistence-fallback', error.message || String(error)); }
+    }
+    if (lastError) debugLog('firebase-persistence-unavailable', lastError.message || String(lastError));
   }
   function setLightspeed(name) {
     try {
@@ -501,8 +510,8 @@
     } catch(e) {}
     try {
       var link = document.getElementById('page-favicon') || document.querySelector('link[rel="icon"]') || document.createElement('link');
-      link.id = 'page-favicon'; link.rel = 'icon'; link.type = 'image/svg+xml';
-      link.href = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(logoSvg().replace(' class="uz-logo-svg"', ''));
+      link.id = 'page-favicon'; link.rel = 'icon'; link.type = 'image/png';
+      link.href = 'logo.png';
       if (!link.parentNode) document.head.appendChild(link);
     } catch(e) {}
   }

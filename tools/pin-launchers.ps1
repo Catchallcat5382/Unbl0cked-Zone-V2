@@ -8,16 +8,8 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 
-$launcherPath = Join-Path $repo 'unblocked zone v2.html'
-$launcher = [IO.File]::ReadAllText($launcherPath)
-$launcherUpdated = [regex]::Replace(
-  $launcher,
-  'var buildRevision = ''[^'']+'';',
-  "var buildRevision = '$Revision';",
-  1
-)
-if ($launcherUpdated -eq $launcher) { throw 'Could not update unblocked zone v2.html.' }
-[IO.File]::WriteAllText($launcherPath, $launcherUpdated, $utf8)
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'build-download.ps1') -Revision $Revision
+if ($LASTEXITCODE -ne 0) { throw 'Could not build the self-contained download.' }
 
 $classPath = Join-Path $repo 'assets\class.html'
 $classPage = [IO.File]::ReadAllText($classPath)
