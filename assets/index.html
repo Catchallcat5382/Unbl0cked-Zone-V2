@@ -18,6 +18,18 @@
         var rawSet = Storage.prototype.setItem;
         var rawRemove = Storage.prototype.removeItem;
         var rawKey = Storage.prototype.key;
+        // A retired build stored a browser-wide shutdown marker. Clear every
+        // legacy copy before any old account-scoped setting can read it.
+        (function () {
+          rawRemove.call(localStorage, 'uzSite' + 'Shutdown');
+          try { sessionStorage.removeItem('uzSite' + 'Shutdown'); } catch (e) {}
+          var retired = [];
+          for (var r = 0; r < localStorage.length; r++) {
+            var retiredKey = rawKey.call(localStorage, r) || '';
+            if (/:uzSiteShutdown$/.test(retiredKey)) retired.push(retiredKey);
+          }
+          retired.forEach(function (retiredKey) { rawRemove.call(localStorage, retiredKey); });
+        })();
         var shared = /^(uzLoginEmail|uzRememberMe|uzRecentAccounts|uzSessionOk|uzSiteBanned|uzBannedAccount:|uzCommunityProfileName:|uzCommunityAvatar:|sb-|supabase\.|community\.|__|ownerBypassHash)/;
         function user() { return String(rawGet.call(localStorage, 'uzLoginEmail') || '').toLowerCase().replace(/[^a-z0-9_.-]/g, '') || ''; }
         (function () {
