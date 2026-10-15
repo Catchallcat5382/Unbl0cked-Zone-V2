@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Tab</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/logo.png">
+  <script>
+    (function () {
+      function clearRetiredShutdownState() {
+        try {
+          localStorage.removeItem('uzSiteShutdown');
+          sessionStorage.removeItem('uzSiteShutdown');
+          var stale = [];
+          for (var i = 0; i < localStorage.length; i++) {
+            var key = localStorage.key(i) || '';
+            if (/(^|:)uzSiteShutdown$/.test(key)) stale.push(key);
+          }
+          stale.forEach(function (key) { localStorage.removeItem(key); });
+        } catch (e) {}
+      }
+      function openFreshBuild() {
+        location.replace('unblocked%20zone%20v2.html?recovered=' + Date.now() + location.hash);
+      }
+      clearRetiredShutdownState();
+      if (window.caches && window.caches.keys) {
+        window.caches.keys().then(function (names) {
+          return Promise.all(names.map(function (name) { return window.caches.delete(name); }));
+        }).then(openFreshBuild, openFreshBuild);
+      } else {
+        openFreshBuild();
+      }
+    })();
+  </script>
+</head>
+<body></body>
+</html>
