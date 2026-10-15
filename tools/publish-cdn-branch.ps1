@@ -6,6 +6,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $paths = @(
   'index.html',
+  'recover.html',
   'unblocked zone v2.html',
   'assets/class.html',
   'assets/index.html',
