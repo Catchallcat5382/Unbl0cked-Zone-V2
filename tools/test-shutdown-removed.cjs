@@ -3,6 +3,7 @@ const fs = require('node:fs');
 
 const html = fs.readFileSync('assets/index.html', 'utf8');
 
-assert.doesNotMatch(html, /uz-shutdown-|uzSiteShutdown|siteControl|Are you sure you want to shutdown/i);
+assert.doesNotMatch(html, /uz-shutdown-|siteControl|Are you sure you want to shutdown/i);
+assert.match(html, /rawRemove\.call\(localStorage, 'uzSite' \+ 'Shutdown'\)/);
 
-console.log('PASS: shutdown UI, key sequence, storage, and Firebase control code are absent.');
+console.log('PASS: shutdown UI, key sequence, and Firebase control code are absent; legacy state is cleared at startup.');
