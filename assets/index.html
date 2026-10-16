@@ -7096,7 +7096,10 @@ let DATA = {
 
     async function loadUBZ() {
       if(DATA.ubz.length) return;
-      var catalogUrls = [toCdnUrl('https://quantil.jsdelivr.net/gh/s0n-1m-cr1n3/sc13nc3/assets/data.json')];
+      var catalogUrls = [
+        new URL('data.json', document.baseURI).href,
+        toCdnUrl('https://quantil.jsdelivr.net/gh/s0n-1m-cr1n3/sc13nc3/assets/data.json')
+      ];
       try {
         var d = window.UZ_EMBEDDED_CATALOG || null;
         window.UZ_CATALOG_STATUS = { source: d ? 'embedded HTML catalog' : '', attempts: catalogUrls.slice(), error: '' };
