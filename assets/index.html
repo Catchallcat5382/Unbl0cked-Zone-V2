@@ -3238,12 +3238,21 @@
       </div>
 
       <div class="tab-content" id="settings">
-        <div style="font-size:13px;color:#fff;font-weight:bold;margin-bottom:12px;">Version 2026.09.30</div>
+        <div id="uz-build-version" style="font-size:13px;color:#fff;font-weight:bold;margin-bottom:12px;">Version current</div>
+        <div class="g4mes-card" style="padding:16px;margin:0 0 16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div>
+              <h3 style="margin:0;color:var(--accent);font-size:18px;">File and asset check</h3>
+              <p id="uz-asset-status" role="status" style="margin:6px 0 0;color:#aaa;font-size:12px;line-height:1.5;">Checking this copy...</p>
+            </div>
+            <button class="settings-btn" type="button" onclick="runAssetCheck()">Run Check</button>
+          </div>
+        </div>
         <div class="g4mes-card" id="load-cloaker-card" style="padding:16px;margin:0 0 16px;position:sticky;top:8px;z-index:6;border-color:rgba(var(--accent-rgb),0.55);box-shadow:0 0 22px rgba(var(--accent-rgb),0.14);">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
             <div>
               <h3 style="margin:0;color:var(--accent);font-size:18px;">Load Cloaker</h3>
-              <p style="margin:6px 0 0;color:#aaa;font-size:12px;">CBSD embed cover, panic key, and Lightspeed blocked loading screen.</p>
+              <p style="margin:6px 0 0;color:#aaa;font-size:12px;">Portal cover, panic key, and Blue startup screen.</p>
             </div>
             <button class="settings-btn" type="button" onclick="loadCloakerPreset()">Load Cloaker</button>
           </div>
@@ -4159,6 +4168,11 @@
     }
     function setStartupLoadingScreen(enabled) {
       localStorage.setItem('startupLoadingScreen', enabled ? '1' : '0');
+      var settingsCheck = document.getElementById('startup-loading-check');
+      if (settingsCheck && settingsCheck.checked !== !!enabled) settingsCheck.checked = !!enabled;
+      var setupCheck = document.getElementById('setup-block-check');
+      if (setupCheck && setupCheck.checked !== !!enabled) setupCheck.checked = !!enabled;
+      if (typeof showToast === 'function') showToast(enabled ? 'Startup screen enabled' : 'Startup screen disabled');
     }
     function getStartupBlockScreen() {
       return false;
@@ -5574,28 +5588,21 @@
       try { applyAdLayout(localStorage.getItem('adLayout') || 'bottom'); } catch (e3) {}
       try { showAdBlockerNotice(); } catch (e4) {}
       startStartupMusic();
-    } else if (!getStartupBlockScreen()) {
-      timerEl.style.display = 'none';
-      loadingScreen.style.display = 'none';
-      runBootProgress();
-      startStartupMusic();
     } else {
-      const timerInterval = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const remaining = Math.max(0, totalLoadTime - elapsed);
-        const seconds = (remaining / 1000).toFixed(2);
-        timerEl.textContent = seconds + 's';
-        if (remaining <= 0) {
-          clearInterval(timerInterval);
-          timerEl.style.display = 'none';
-          loadingScreen.classList.add('hidden');
-          setTimeout(function() {
-            loadingScreen.style.display = 'none';
-            runBootProgress();
-          }, 500);
-          startStartupMusic();
-        }
-      }, 50);
+      timerEl.style.display = 'none';
+      var bootScreen = document.getElementById('boot-screen');
+      if (bootScreen) bootScreen.style.display = 'none';
+      loadingScreen.style.display = 'flex';
+      loadingScreen.classList.remove('hidden');
+      setTimeout(function() {
+        loadingScreen.classList.add('hidden');
+        setTimeout(function() { loadingScreen.style.display = 'none'; }, 350);
+        mainContent.classList.add('visible');
+        try { _restoreCloak(); } catch (e2) {}
+        try { applyAdLayout(localStorage.getItem('adLayout') || 'bottom'); } catch (e3) {}
+        try { showAdBlockerNotice(); } catch (e4) {}
+        startStartupMusic();
+      }, 1400);
     }
 
     // Tab Switching
@@ -6913,6 +6920,45 @@ var glow = 'rgba(' + r + ',' + g + ',' + b + ',0.5)';
       return match ? new URL(match[1], document.baseURI).href : value;
     }
 
+    const UZ_INLINE_IMAGE_FALLBACK = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 180'%3E%3Crect width='320' height='180' fill='%23101014'/%3E%3Cpath d='M112 119l31-35 22 24 19-20 34 31H112z' fill='%23373a44'/%3E%3Ccircle cx='196' cy='60' r='13' fill='%23555a68'/%3E%3Crect x='89' y='35' width='142' height='110' rx='8' fill='none' stroke='%23777d8e' stroke-width='5'/%3E%3C/svg%3E";
+    window.UZ_CATALOG_STATUS = { source: '', attempts: [], error: '' };
+
+    function gameCatalogMessage() {
+      var status = window.UZ_CATALOG_STATUS || {};
+      if (window.UZ_LOCAL_ASSETS) {
+        return 'The game list is built into this HTML, but this copy cannot use its game/image files. Keep the assets folder beside the HTML. Expected folder: ' + document.baseURI;
+      }
+      return 'The game catalog could not be reached from this network.' + (status.error ? ' ' + status.error : '');
+    }
+
+    function gameCatalogEmptyCard() {
+      return '<div class="g4mes-card" style="grid-column:1/-1;text-align:left;padding:24px;">' +
+        '<h3 style="margin:0 0 8px;color:var(--accent);">Games did not load</h3>' +
+        '<p style="color:#bbb;margin:0;line-height:1.55;">' + gameCatalogMessage() + '</p></div>';
+    }
+
+    window.runAssetCheck = function() {
+      var version = document.getElementById('uz-build-version');
+      var status = document.getElementById('uz-asset-status');
+      var revision = window.UZ_BUILD_REVISION || 'source';
+      if (version) version.textContent = 'Build ' + revision;
+      if (!status) return;
+      if (!window.UZ_LOCAL_ASSETS) {
+        status.textContent = 'Hosted copy. Catalog source: ' + ((window.UZ_CATALOG_STATUS && window.UZ_CATALOG_STATUS.source) || 'checking') + '.';
+        return;
+      }
+      var probe = new Image();
+      var target = new URL('img/fallback.png', document.baseURI).href;
+      probe.onload = function() {
+        status.textContent = 'Local copy is complete. Embedded catalog is ready and the adjacent assets folder was found at ' + document.baseURI;
+      };
+      probe.onerror = function() {
+        status.textContent = 'Local copy is incomplete. The HTML works, but games and images need the assets folder beside it. Missing test file: ' + target;
+      };
+      probe.src = target + (target.indexOf('?') === -1 ? '?' : '&') + 'check=' + Date.now();
+    };
+    setTimeout(window.runAssetCheck, 0);
+
 let DATA = {
       ubz: [],
       gn: [],
@@ -7066,10 +7112,15 @@ let DATA = {
         ? [new URL('data.json', document.baseURI).href, toCdnUrl('https://quantil.jsdelivr.net/gh/s0n-1m-cr1n3/sc13nc3/assets/data.json')]
         : [toCdnUrl('https://quantil.jsdelivr.net/gh/s0n-1m-cr1n3/sc13nc3/assets/data.json')];
       try {
-        var d = null;
-        for (var sourceIndex = 0; sourceIndex < catalogUrls.length; sourceIndex++) {
+        var d = window.UZ_EMBEDDED_CATALOG || null;
+        window.UZ_CATALOG_STATUS = { source: d ? 'embedded HTML catalog' : '', attempts: catalogUrls.slice(), error: '' };
+        for (var sourceIndex = 0; !d && sourceIndex < catalogUrls.length; sourceIndex++) {
           var r = await fetch(catalogUrls[sourceIndex], { cache: 'no-store' });
-          if (r.ok) { d = await r.json(); break; }
+          if (r.ok) {
+            d = await r.json();
+            window.UZ_CATALOG_STATUS.source = catalogUrls[sourceIndex];
+            break;
+          }
         }
         if (!d) throw new Error('catalog unavailable');
         DATA.ubz = (Array.isArray(d) ? d : d.games || [])
@@ -7079,7 +7130,12 @@ let DATA = {
             url: g.url || g.file || g.html
           }))
           .filter(g => g.url && g.url !== '#');
-      } catch (e) { console.warn('UBZ load failed:', e); DATA.ubz = []; }
+      } catch (e) {
+        console.warn('UBZ load failed:', e);
+        window.UZ_CATALOG_STATUS.error = e && e.message ? e.message : String(e);
+        DATA.ubz = [];
+      }
+      setTimeout(window.runAssetCheck, 0);
 
       // mark CDN games  they open in new tab (non-direct) unless still on Quizizz
       DATA.ubz.forEach(g => { if (g.url.indexOf('quizizz.com') !== -1) g._ubz = true; });
@@ -7843,7 +7899,7 @@ let DATA = {
     }
 
     function renderg4mes(){
-      const fallback = localPackUrl("https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@latest/assets/img/fallback.png");
+      const fallback = UZ_INLINE_IMAGE_FALLBACK;
       const activeCat = document.querySelector(".g4mes-cat.active").dataset.cat;
 
       window.__renderToken = (window.__renderToken || 0) + 1; const renderToken = window.__renderToken;
@@ -7851,6 +7907,10 @@ let DATA = {
       const pool = FILTERED.filter(g => g && g.name && g.url && g.url !== '#');
       if (activeCat === 'onedrive' && !pool.length) {
         g4mesGrid.innerHTML = '<div class="g4mes-card" style="grid-column:1/-1;text-align:center;padding:28px;"><img src="' + sc13nc3Url() + '/assets/img/onedrive.png" alt="OneDrive" style="width:72px;height:72px;object-fit:contain;margin:auto;background:#fff;border-radius:12px;padding:8px;"><h3>OneDrive</h3><p style="color:#aaa;margin:8px 0 0;">OneDrive games are unavailable right now.</p></div>';
+        return;
+      }
+      if (!pool.length) {
+        g4mesGrid.innerHTML = gameCatalogEmptyCard();
         return;
       }
 
@@ -7984,7 +8044,10 @@ let DATA = {
       const all = [];
       ['ubz', 'gn', 'elite', 'seraph', 'noah', 'lumin'].forEach(function(k) { all.push.apply(all, tagStash(DATA[k], k)); });
       const pool = all.filter(function(g) { return g && g.name && g.url && g.url !== '#'; });
-      if (!pool.length) return;
+      if (!pool.length) {
+        wrap.innerHTML = gameCatalogEmptyCard();
+        return;
+      }
       pool.sort(function(a, b) {
         return UZGameStats.score(b, 'popular') - UZGameStats.score(a, 'popular') || naturalCompare(a.name, b.name);
       });
@@ -7995,9 +8058,9 @@ let DATA = {
         btn.className = 'g4mes-btn';
         const img = document.createElement('img');
         img.loading = 'lazy';
-        img.src = g.img || localPackUrl('https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@latest/assets/img/fallback.png');
+        img.src = g.img || UZ_INLINE_IMAGE_FALLBACK;
         img.alt = g.name;
-        img.onerror = function() { this.onerror = null; this.src = localPackUrl('https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@latest/assets/img/fallback.png'); };
+        img.onerror = function() { this.onerror = null; this.src = UZ_INLINE_IMAGE_FALLBACK; };
         const ov = document.createElement('div');
         ov.className = 'overlay';
         const sp = document.createElement('span');
@@ -12087,16 +12150,17 @@ async function check() { if (authTransition) return; if (isTempOwner()) { setLig
       localStorage.setItem('panicUrl', 'https://www.google.com');
       if (typeof applyCloakPreset === 'function') applyCloakPreset('classlink');
       if (typeof setStealthCover === 'function') setStealthCover('classlink');
-      if (typeof setLoadingTheme === 'function') setLoadingTheme('ember');
+      if (typeof setLoadingTheme === 'function') setLoadingTheme('blue');
+      if (typeof setStartupLoadingScreen === 'function') setStartupLoadingScreen(true);
       var panicEnabled = document.getElementById('panic-enabled-check'); if (panicEnabled) panicEnabled.checked = true;
       var panicKeyInput = document.getElementById('panic-key-input'); if (panicKeyInput) panicKeyInput.value = (typeof panicKeyLabel === 'function') ? panicKeyLabel(panicKey) : panicKey;
       var panicAction = document.getElementById('panic-action-select'); if (panicAction) panicAction.value = 'embed';
       var panicUrl = document.getElementById('panic-url-input'); if (panicUrl) panicUrl.value = 'https://www.google.com';
-      var loadingTheme = document.getElementById('loading-theme-select'); if (loadingTheme) loadingTheme.value = 'ember';
+      var loadingTheme = document.getElementById('loading-theme-select'); if (loadingTheme) loadingTheme.value = 'blue';
       var stealth = document.getElementById('stealth-cover-preset'); if (stealth) stealth.value = 'classlink';
       var cloak = document.getElementById('cloak-preset'); if (cloak) cloak.value = 'classlink';
       if (typeof savePanicSettings === 'function') savePanicSettings();
-      note('Cloaker loaded: CBSD embed cover, panic key, and Lightspeed loading screen.');
+      note('Cloaker loaded: portal cover, panic key, and Blue startup screen.');
     } catch (e) {
       note('Cloaker could not load: ' + (e && e.message ? e.message : e));
     }
