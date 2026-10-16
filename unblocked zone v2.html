@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <base href="https://cdn.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@cdn/assets/">
-  <script>window.UZ_BUILD_REVISION = '5848e0d';</script>
+  <script>window.UZ_BUILD_REVISION = 'd49ff95';</script>
 <script data-inline="assets/data.json">window.UZ_EMBEDDED_CATALOG=[
   {
     "name": "1v1.LOL",
@@ -8066,8 +8066,33 @@ var glow = 'rgba(' + r + ',' + g + ',' + b + ',0.5)';
     function localPackUrl(value) {
       value = String(value || '').trim();
       if (!window.UZ_LOCAL_ASSETS || !value) return value;
+      var preferLocal = false;
+      try { preferLocal = localStorage.getItem('uzPreferLocalGameAssets') === '1'; } catch (e) {}
+      if (!preferLocal) return value;
+      return localAssetUrl(value) || value;
+    }
+
+    function localAssetUrl(value) {
+      value = String(value || '').trim();
+      if (!window.UZ_LOCAL_ASSETS || !value) return '';
       var match = value.match(/\/assets\/(.+)$/i);
-      return match ? new URL(match[1], document.baseURI).href : value;
+      return match ? new URL(match[1], document.baseURI).href : '';
+    }
+
+    function setGameImageSource(image, value) {
+      if (!image) return;
+      var remote = String(value || '').trim();
+      var local = localAssetUrl(remote);
+      image.onerror = function() {
+        if (local && image.src !== local) {
+          image.onerror = function() { image.onerror = null; image.src = UZ_INLINE_IMAGE_FALLBACK; };
+          image.src = local;
+          return;
+        }
+        image.onerror = null;
+        image.src = UZ_INLINE_IMAGE_FALLBACK;
+      };
+      image.src = remote || local || UZ_INLINE_IMAGE_FALLBACK;
     }
 
     const UZ_INLINE_IMAGE_FALLBACK = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 180'%3E%3Crect width='320' height='180' fill='%23101014'/%3E%3Cpath d='M112 119l31-35 22 24 19-20 34 31H112z' fill='%23373a44'/%3E%3Ccircle cx='196' cy='60' r='13' fill='%23555a68'/%3E%3Crect x='89' y='35' width='142' height='110' rx='8' fill='none' stroke='%23777d8e' stroke-width='5'/%3E%3C/svg%3E";
@@ -8076,7 +8101,7 @@ var glow = 'rgba(' + r + ',' + g + ',' + b + ',0.5)';
     function gameCatalogMessage() {
       var status = window.UZ_CATALOG_STATUS || {};
       if (window.UZ_LOCAL_ASSETS) {
-        return 'The game list is built into this HTML, but this copy cannot use its game/image files. Keep the assets folder beside the HTML. Expected folder: ' + document.baseURI;
+        return 'The embedded game list is available, but hosted game files could not be reached. The local backup folder is expected at ' + document.baseURI;
       }
       return 'The game catalog could not be reached from this network.' + (status.error ? ' ' + status.error : '');
     }
@@ -8100,10 +8125,10 @@ var glow = 'rgba(' + r + ',' + g + ',' + b + ',0.5)';
       var probe = new Image();
       var target = new URL('img/fallback.png', document.baseURI).href;
       probe.onload = function() {
-        status.textContent = 'Local copy is complete. Embedded catalog is ready and the adjacent assets folder was found at ' + document.baseURI;
+        status.textContent = 'Hosted game loading is active, matching the old loader. The local backup assets folder was also found at ' + document.baseURI;
       };
       probe.onerror = function() {
-        status.textContent = 'Local copy is incomplete. The HTML works, but games and images need the assets folder beside it. Missing test file: ' + target;
+        status.textContent = 'Hosted game loading is active, matching the old loader. Local backup assets were not found at ' + target;
       };
       probe.src = target + (target.indexOf('?') === -1 ? '?' : '&') + 'check=' + Date.now();
     };
@@ -9074,11 +9099,10 @@ let DATA = {
       let rIdx = -1;
       const rStep = function() {
         rIdx = (rIdx + 1) % (rImgs.length || 1);
-        rImg.src = rImgs[rIdx] || fallback;
+        setGameImageSource(rImg, rImgs[rIdx] || fallback);
       };
       rStep();
       if (rImgs.length > 1) {
-        rImg.onerror = function() { this.onerror = null; this.src = fallback; };
         // Only fetch a new random thumbnail while this card is actually
         // visible on screen  previously this ran on an unconditional
         // setInterval, silently fetching a fresh image from the CDN every
@@ -9143,10 +9167,11 @@ let DATA = {
             : '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-heart w-4 h-4 fav-outline" aria-hidden="true" xmlns:xlink="http://www.w3.org/1999/xlink"><path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5" style="stroke-width: 2;"/></svg>';
           card.innerHTML = `
             <button class="fav-btn${fav ? ' active' : ''}">${heartSVG}</button>
-            <img loading="lazy" decoding="async" crossorigin="anonymous" src="${g.img || fallback}" onerror="this.onerror=null;this.src='${fallback}'">
+            <img loading="lazy" decoding="async" alt="">
             <h3>${g.name.replace(/</g,'&lt;')}${showStash ? `<span class="fav-stash-tag">${showStash}</span>` : ''}</h3>
             <div class="g4mes-stats"></div>
             <div class="play-btn">Play</div>`;
+          setGameImageSource(card.querySelector('img'), g.img || fallback);
           card.querySelector('.g4mes-stats').textContent = UZGameStats.summary(g);
           card.querySelector('.fav-btn').onclick = (e) => {
             e.stopPropagation();
@@ -9208,9 +9233,8 @@ let DATA = {
         btn.className = 'g4mes-btn';
         const img = document.createElement('img');
         img.loading = 'lazy';
-        img.src = g.img || UZ_INLINE_IMAGE_FALLBACK;
         img.alt = g.name;
-        img.onerror = function() { this.onerror = null; this.src = UZ_INLINE_IMAGE_FALLBACK; };
+        setGameImageSource(img, g.img || UZ_INLINE_IMAGE_FALLBACK);
         const ov = document.createElement('div');
         ov.className = 'overlay';
         const sp = document.createElement('span');
