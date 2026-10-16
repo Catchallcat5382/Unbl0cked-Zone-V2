@@ -242,6 +242,18 @@
       font-family: 'Roboto', sans-serif;
     }
     #loading-screen.hidden { opacity: 0; pointer-events: none; }
+    #uz-startup-splash{display:flex;flex-direction:column;align-items:center;gap:18px;max-width:min(460px,86vw);text-align:center;color:#f4f7fb}
+    #uz-startup-splash .uz-startup-mark{width:68px;height:68px;border:3px solid currentColor;border-radius:18px;display:grid;place-items:center;font:800 32px/1 Arial,sans-serif;box-shadow:0 0 26px currentColor}
+    #uz-startup-splash h1{margin:0;font:700 26px/1.1 Arial,sans-serif;letter-spacing:0}
+    #uz-startup-splash p{margin:0;color:inherit;opacity:.78;font:15px/1.45 Arial,sans-serif}
+    #uz-startup-splash .uz-startup-progress{width:min(300px,76vw);height:8px;background:#ffffff24;overflow:hidden;border-radius:99px}
+    #uz-startup-splash .uz-startup-progress::after{content:'';display:block;width:42%;height:100%;background:currentColor;border-radius:inherit;animation:uzStartupSweep 1s ease-in-out infinite alternate}
+    #loading-screen.uz-startup-ember{background:#190b05;color:#ff8a3d}
+    #loading-screen.uz-startup-blue{background:#071827;color:#56b9ff}
+    #loading-screen.uz-startup-midnight{background:#090a0e;color:#d6d9e2}
+    #loading-screen.uz-startup-light{background:#f3f6fb;color:#1768b1}
+    #loading-screen.uz-startup-light #uz-startup-splash p{color:#29415a}
+    @keyframes uzStartupSweep{from{transform:translateX(-70%)}to{transform:translateX(190%)}}
     /* The startup blocker owns the viewport until it is fully dismissed. */
     body.uz-block-screen-active #sidebar,
     body.uz-block-screen-active #sidebar-toggle,
@@ -1768,6 +1780,12 @@
           </div>
         </div>
       </div>
+    </div>
+    <div id="uz-startup-splash" aria-live="polite">
+      <div class="uz-startup-mark">UZ</div>
+      <h1>Unbl0cked Zone</h1>
+      <p>Preparing local content...</p>
+      <div class="uz-startup-progress" aria-hidden="true"></div>
     </div>
     <div id="cdn-block" class="hidden"></div>
   </div>
@@ -3490,6 +3508,14 @@
               <input type="checkbox" id="startup-loading-check" onchange="setStartupLoadingScreen(this.checked)" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;">
               Loading screen on startup
             </label>
+            <label style="display:block;margin-top:10px;color:#aaa;font:700 13px Arial,sans-serif;">Startup screen style
+              <select id="loading-theme-select" class="settings-input" onchange="setLoadingTheme(this.value)" style="margin-top:6px;">
+                <option value="ember">Ember</option>
+                <option value="blue">Blue</option>
+                <option value="midnight">Midnight</option>
+                <option value="light">Light</option>
+              </select>
+            </label>
             <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:14px 0;">
             <p style="color:#aaa;font-size:13px;font-weight:bold;">Gaming Tools</p>
             <p style="color:#aaa;font-size:13px;font-weight:bold;margin-top:12px;">Stretched Res</p>
@@ -3609,6 +3635,12 @@
             <input type="checkbox" id="setup-block-check" onchange="setStartupLoadingScreen(this.checked)">
             Loading screen on startup
           </label>
+          <select id="setup-theme-select" class="settings-input" onchange="setLoadingTheme(this.value)" style="margin-top:14px;">
+            <option value="ember">Ember</option>
+            <option value="blue">Blue</option>
+            <option value="midnight">Midnight</option>
+            <option value="light">Light</option>
+          </select>
           <div class="setup-actions">
             <button class="setup-btn-ghost" onclick="setupGo(2)">Back</button>
             <button class="setup-btn" onclick="setupGo(4)">Continue</button>
@@ -6595,23 +6627,18 @@ var glow = 'rgba(' + r + ',' + g + ',' + b + ',0.5)';
       if (sel) sel.value = theme;
     }
     function setLoadingTheme(theme) {
+      var supported = { ember: true, blue: true, midnight: true, light: true };
+      if (!supported[theme]) theme = 'ember';
       lsTheme = theme;
       localStorage.setItem('loadingTheme', theme);
       var screen = document.getElementById('loading-screen');
       if (!screen) return;
-      screen.classList.remove('goguardian-theme', 'securly-theme', 'classlink-theme');
-      if (theme === 'goguardian') screen.classList.add('goguardian-theme');
-      if (theme === 'securly') screen.classList.add('securly-theme');
-      if (theme === 'classlink') screen.classList.add('classlink-theme');
-      var lsF = document.getElementById('ls-text-fields');
-      if (lsF) lsF.style.display = theme === 'lightspeed' ? 'flex' : 'none';
-      var ggF = document.getElementById('gg-text-fields');
-      if (ggF) ggF.style.display = theme === 'goguardian' ? 'flex' : 'none';
-      var scF = document.getElementById('sc-text-fields');
-      if (scF) scF.style.display = theme === 'securly' ? 'flex' : 'none';
+      screen.classList.remove('goguardian-theme', 'securly-theme', 'classlink-theme', 'uz-startup-ember', 'uz-startup-blue', 'uz-startup-midnight', 'uz-startup-light');
+      screen.classList.add('uz-startup-' + theme);
       var ts = document.getElementById('loading-theme-select');
       if (ts) ts.value = theme;
-      loadLightspeedText();
+      var setupTheme = document.getElementById('setup-theme-select');
+      if (setupTheme) setupTheme.value = theme;
     }
 
     function applyCustomCursor() {
@@ -6840,7 +6867,7 @@ var glow = 'rgba(' + r + ',' + g + ',' + b + ',0.5)';
     syncBlockedPageIdentity();
     var savedAccent = localStorage.getItem('accentColorV2');
     if (savedAccent) setAccent(savedAccent);
-    var savedTheme = localStorage.getItem('loadingTheme') || 'lightspeed';
+    var savedTheme = localStorage.getItem('loadingTheme') || 'ember';
     setLoadingTheme(savedTheme);
 
     function toggleg4mesFullscreen() {
@@ -8197,6 +8224,8 @@ let DATA = {
         if (sel && cloakPresets[preset]) sel.value = preset;
         var startupCheck = document.getElementById('setup-block-check');
         if (startupCheck) startupCheck.checked = getStartupLoadingScreen();
+        var setupTheme = document.getElementById('setup-theme-select');
+        if (setupTheme) setupTheme.value = localStorage.getItem('loadingTheme') || 'ember';
         var bg = document.getElementById('setup-bg-select');
         if (bg) bg.value = localStorage.getItem('bgMode') || 'starfield';
         var sp = document.getElementById('setup-sidebar-select');
@@ -12058,12 +12087,12 @@ async function check() { if (authTransition) return; if (isTempOwner()) { setLig
       localStorage.setItem('panicUrl', 'https://www.google.com');
       if (typeof applyCloakPreset === 'function') applyCloakPreset('classlink');
       if (typeof setStealthCover === 'function') setStealthCover('classlink');
-      if (typeof setLoadingTheme === 'function') setLoadingTheme('lightspeed');
+      if (typeof setLoadingTheme === 'function') setLoadingTheme('ember');
       var panicEnabled = document.getElementById('panic-enabled-check'); if (panicEnabled) panicEnabled.checked = true;
       var panicKeyInput = document.getElementById('panic-key-input'); if (panicKeyInput) panicKeyInput.value = (typeof panicKeyLabel === 'function') ? panicKeyLabel(panicKey) : panicKey;
       var panicAction = document.getElementById('panic-action-select'); if (panicAction) panicAction.value = 'embed';
       var panicUrl = document.getElementById('panic-url-input'); if (panicUrl) panicUrl.value = 'https://www.google.com';
-      var loadingTheme = document.getElementById('loading-theme-select'); if (loadingTheme) loadingTheme.value = 'lightspeed';
+      var loadingTheme = document.getElementById('loading-theme-select'); if (loadingTheme) loadingTheme.value = 'ember';
       var stealth = document.getElementById('stealth-cover-preset'); if (stealth) stealth.value = 'classlink';
       var cloak = document.getElementById('cloak-preset'); if (cloak) cloak.value = 'classlink';
       if (typeof savePanicSettings === 'function') savePanicSettings();
