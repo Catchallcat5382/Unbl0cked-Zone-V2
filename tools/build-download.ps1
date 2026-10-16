@@ -12,7 +12,17 @@ $outputPath = Join-Path $root 'unblocked zone v2.html'
 $html = [IO.File]::ReadAllText($sourcePath, $utf8)
 
 $baseHref = 'https://cdn.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@cdn/assets/'
-$head = '<head$1>' + [Environment]::NewLine + ('  <base href="{0}">' -f $baseHref) + [Environment]::NewLine + ("  <script>window.UZ_BUILD_REVISION = '{0}';</script>" -f $Revision)
+$localAssetBootstrap = @'
+  <script>
+    (function () {
+      if (location.protocol !== 'file:') return;
+      window.UZ_LOCAL_ASSETS = true;
+      var base = document.querySelector('base');
+      if (base) base.href = new URL('assets/', location.href).href;
+    }());
+  </script>
+'@
+$head = '<head$1>' + [Environment]::NewLine + ('  <base href="{0}">' -f $baseHref) + [Environment]::NewLine + ("  <script>window.UZ_BUILD_REVISION = '{0}';</script>" -f $Revision) + [Environment]::NewLine + $localAssetBootstrap
 $headPattern = [regex]::new('<head([^>]*)>')
 $html = $headPattern.Replace($html, $head, 1)
 
