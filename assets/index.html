@@ -3481,20 +3481,6 @@
               Performance Mode
             </label>
             <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:14px 0;">
-            <p style="color:#aaa;font-size:13px;font-weight:bold;">Loading Screen</p>
-            <label style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer;color:var(--accent);font-family:'ApplePixel',sans-serif;font-size:14px;">
-              <input type="checkbox" id="loading-screen-enabled-check" onchange="setStartupBlockScreen(this.checked)" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;">
-              Show block screen on startup
-            </label>
-            <p style="color:#aaa;font-size:13px;font-weight:bold;margin-top:12px;">Block Screen Theme</p>
-            <select id="loading-theme-select" class="settings-input" onchange="setLoadingTheme(this.value)" style="margin-top:6px;">
-              <option value="lightspeed">Lightspeed</option>
-              <option value="goguardian">GoGuardian</option>
-              <option value="securly">Securly</option>
-              <option value="classlink">ClassLink</option>
-              <option value="lightspeedclassroom">Lightspeed Classroom</option>
-            </select>
-            <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:14px 0;">
             <p style="color:#aaa;font-size:13px;font-weight:bold;">Startup Options</p>
             <label style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer;color:var(--accent);font-family:'ApplePixel',sans-serif;font-size:14px;">
               <input type="checkbox" id="music-startup-check" onchange="setMusicOnStartup(this.checked)" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;">
@@ -3617,20 +3603,12 @@
           </div>
         </div>
         <div class="setup-step" data-step="3">
-          <h3>Block Screen</h3>
-          <p>If you're on a school device, the startup block screen makes this site look like it's been blocked.</p>
+          <h3>Startup Screen</h3>
+          <p>Show the portal's standard loading screen while its local resources are prepared.</p>
           <label>
-            <input type="checkbox" id="setup-block-check" onchange="setStartupBlockScreen(this.checked)">
-            Show block screen on startup
+            <input type="checkbox" id="setup-block-check" onchange="setStartupLoadingScreen(this.checked)">
+            Loading screen on startup
           </label>
-          <p style="margin-top:14px;">Theme:</p>
-          <select id="setup-theme-select" class="settings-input" onchange="setLoadingTheme(this.value)">
-            <option value="lightspeed">Lightspeed</option>
-            <option value="goguardian">GoGuardian</option>
-            <option value="securly">Securly</option>
-            <option value="classlink">ClassLink</option>
-            <option value="lightspeedclassroom">Lightspeed Classroom</option>
-          </select>
           <div class="setup-actions">
             <button class="setup-btn-ghost" onclick="setupGo(2)">Back</button>
             <button class="setup-btn" onclick="setupGo(4)">Continue</button>
@@ -5865,10 +5843,11 @@
       currentg4mesDirectSrc = directSrc;
       url = String(url || '').trim();
       UZGameStats.bump({ name: name, url: url }, 'plays');
-      var isDirect = directSrc || url.indexOf('quizizz.com') !== -1;
+      var isLocalFile = /^file:/i.test(url);
+      var isDirect = directSrc || isLocalFile || url.indexOf('quizizz.com') !== -1;
       document.getElementById('gv-newwindow').style.display = '';
       document.getElementById('gv-popout').style.display = '';
-      if (!url.startsWith('http')) {
+      if (!/^https?:/i.test(url) && !isLocalFile) {
         document.getElementById('gv-title-text').textContent = name;
         const gvLoad = document.getElementById('gv-loading');
         gvLoad.textContent = 'Invalid URL';
@@ -7837,7 +7816,7 @@ let DATA = {
     }
 
     function renderg4mes(){
-      const fallback = "https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@latest/assets/img/fallback.png";
+      const fallback = localPackUrl("https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@latest/assets/img/fallback.png");
       const activeCat = document.querySelector(".g4mes-cat.active").dataset.cat;
 
       window.__renderToken = (window.__renderToken || 0) + 1; const renderToken = window.__renderToken;
@@ -7989,9 +7968,9 @@ let DATA = {
         btn.className = 'g4mes-btn';
         const img = document.createElement('img');
         img.loading = 'lazy';
-        img.src = g.img || 'https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@latest/assets/img/fallback.png';
+        img.src = g.img || localPackUrl('https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@latest/assets/img/fallback.png');
         img.alt = g.name;
-        img.onerror = function() { this.onerror = null; this.src = 'https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@latest/assets/img/fallback.png'; };
+        img.onerror = function() { this.onerror = null; this.src = localPackUrl('https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@latest/assets/img/fallback.png'); };
         const ov = document.createElement('div');
         ov.className = 'overlay';
         const sp = document.createElement('span');
@@ -8216,8 +8195,8 @@ let DATA = {
         var preset = localStorage.getItem('cloakPreset') || 'newtab';
         var sel = document.getElementById('setup-cloak-select');
         if (sel && cloakPresets[preset]) sel.value = preset;
-        document.getElementById('setup-block-check').checked = getStartupBlockScreen();
-        document.getElementById('setup-theme-select').value = localStorage.getItem('loadingTheme') || 'lightspeed';
+        var startupCheck = document.getElementById('setup-block-check');
+        if (startupCheck) startupCheck.checked = getStartupLoadingScreen();
         var bg = document.getElementById('setup-bg-select');
         if (bg) bg.value = localStorage.getItem('bgMode') || 'starfield';
         var sp = document.getElementById('setup-sidebar-select');
