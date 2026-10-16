@@ -9,6 +9,7 @@ $paths = @(
   'recover.html',
   'unblocked zone v2.html',
   'assets/class.html',
+  'assets/data.json',
   'assets/index.html',
   'assets/community/community.css',
   'assets/community/config.js',
@@ -58,6 +59,22 @@ try {
   & git push origin ($commit + ':refs/heads/' + $Branch)
   if ($LASTEXITCODE -ne 0) { throw 'Could not push the CDN branch.' }
   Write-Host "Published lightweight CDN branch at $commit."
+
+  $purgePaths = @(
+    'assets/class.html',
+    'assets/data.json',
+    'assets/index.html',
+    'unblocked%20zone%20v2.html'
+  )
+  foreach ($path in $purgePaths) {
+    $purgeUrl = 'https://purge.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@' + $Branch + '/' + $path
+    try {
+      Invoke-RestMethod -Method Get -Uri $purgeUrl -TimeoutSec 30 | Out-Null
+      Write-Host "Purged jsDelivr cache for $path."
+    } catch {
+      Write-Warning "Could not purge jsDelivr cache for $path. The branch was still published."
+    }
+  }
 } finally {
   if ($null -eq $oldIndex) { Remove-Item Env:GIT_INDEX_FILE -ErrorAction SilentlyContinue } else { $env:GIT_INDEX_FILE = $oldIndex }
   Remove-Item -LiteralPath $indexPath -Force -ErrorAction SilentlyContinue

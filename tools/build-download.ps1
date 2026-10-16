@@ -7,43 +7,63 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $utf8 = New-Object System.Text.UTF8Encoding($false)
-$sourcePath = Join-Path $root 'assets\index.html'
 $outputPath = Join-Path $root 'unblocked zone v2.html'
-$html = [IO.File]::ReadAllText($sourcePath, $utf8)
-$catalogJson = [IO.File]::ReadAllText((Join-Path $root 'assets\data.json'), $utf8).Replace('</script', '<\/script')
-$catalogScript = '<script data-inline="assets/data.json">window.UZ_EMBEDDED_CATALOG=' + $catalogJson + ';</script>'
 
-$baseHref = 'https://cdn.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@{0}/assets/' -f $Revision
-$head = '<head$1>' + [Environment]::NewLine + ('  <base href="{0}">' -f $baseHref) + [Environment]::NewLine + ("  <script>window.UZ_BUILD_REVISION = '{0}';</script>" -f $Revision) + [Environment]::NewLine + $catalogScript
-$headPattern = [regex]::new('<head([^>]*)>')
-$html = $headPattern.Replace($html, $head, 1)
+$html = @"
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>New Tab</title>
+  <style>html,body{margin:0;width:100%;height:100%;background:#000}</style>
+</head>
+<body>
+<script>
+(function () {
+  var revision = '$Revision';
+  var repo = 'Catchallcat5382/Unbl0cked-Zone-V2';
+  var roots = [
+    'https://cdn.jsdelivr.net/gh/' + repo + '@cdn/assets/',
+    'https://quantil.jsdelivr.net/gh/' + repo + '@cdn/assets/',
+    'https://gcore.jsdelivr.net/gh/' + repo + '@cdn/assets/',
+    'https://cdn.jsdelivr.net/gh/' + repo + '@' + revision + '/assets/',
+    'https://quantil.jsdelivr.net/gh/' + repo + '@' + revision + '/assets/',
+    'https://raw.githubusercontent.com/' + repo + '/' + revision + '/assets/'
+  ];
 
-$css = [IO.File]::ReadAllText((Join-Path $root 'assets\community\community.css'), $utf8).Replace('</style', '<\/style')
-$cssReplacement = '<style id="community-inline-css">' + $css + '</style>'
-$cssPattern = [regex]::new('<link\s+rel=["'']stylesheet["'']\s+href=["'']community/community\.css["'']\s*>')
-$html = $cssPattern.Replace(
-  $html,
-  [System.Text.RegularExpressions.MatchEvaluator]{ param($match) $cssReplacement },
-  1
-)
+  function injectBase(html, root) {
+    var base = '<base href="' + root.replace(/"/g, '&quot;') + '">';
+    if (/<base\s/i.test(html)) return html.replace(/<base\s[^>]*>/i, base);
+    return html.replace(/<head([^>]*)>/i, '<head`$1>' + base);
+  }
 
-$vendorFiles = @('firebase-app-compat.js', 'firebase-auth-compat.js', 'firebase-firestore-compat.js')
-foreach ($name in $vendorFiles) {
-  $code = [IO.File]::ReadAllText((Join-Path $root ('assets\vendor\' + $name)), $utf8).Replace('</script', '<\/script')
-  $pattern = [regex]::new('<script\s+src=["'']vendor/' + [regex]::Escape($name) + '["'']\s*></script>')
-  $replacement = '<script data-inline="vendor/' + $name + '">' + $code + '</script>'
-  $html = $pattern.Replace(
-    $html,
-    [System.Text.RegularExpressions.MatchEvaluator]{ param($match) $replacement },
-    1
-  )
-}
+  function load(index) {
+    if (index >= roots.length) {
+      document.body.innerHTML = '<main style="padding:32px;font:16px Arial;color:#111;background:#fff;min-height:100%"><h1>Error 404</h1><p>Page Not Found</p></main>';
+      return;
+    }
+    var root = roots[index];
+    fetch(root + 'index.html?v=' + encodeURIComponent(revision + '-' + Date.now()), { cache: 'no-store' })
+      .then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.text();
+      })
+      .then(function (html) {
+        document.open();
+        document.write(injectBase(html, root));
+        document.close();
+      })
+      .catch(function () { load(index + 1); });
+  }
 
-$logoBytes = [IO.File]::ReadAllBytes((Join-Path $root 'assets\logo.png'))
-$logoUri = 'data:image/png;base64,' + [Convert]::ToBase64String($logoBytes)
-$html = $html.Replace('logo.png', $logoUri)
-$titlePattern = [regex]::new('<title>[^<]*</title>')
-$html = $titlePattern.Replace($html, '<title>New Tab</title>', 1)
+  try { localStorage.removeItem('uzPreferLocalGameAssets'); } catch (error) {}
+  load(0);
+}());
+</script>
+</body>
+</html>
+"@
 
 [IO.File]::WriteAllText($outputPath, $html, $utf8)
-Write-Output "Built self-contained download: $outputPath"
+Write-Output "Built CDN loader: $outputPath"
