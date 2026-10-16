@@ -10,8 +10,10 @@ const launcher = fs.readFileSync(path.join(root, 'assets', 'class.html'), 'utf8'
 assert.match(standalone, /window\.UZ_EMBEDDED_CATALOG=/, 'standalone HTML must embed the game catalog');
 assert.match(standalone, /window\.UZ_LOCAL_ASSETS = true/, 'standalone HTML must enable local asset paths');
 assert.match(source, /File and asset check/, 'settings must expose the asset diagnostic');
-assert.match(source, /Local copy is incomplete/, 'missing local assets must produce a useful error');
+assert.match(source, /Local backup assets were not found/, 'missing local assets must produce a useful error');
 assert.match(source, /UZ_INLINE_IMAGE_FALLBACK/, 'broken thumbnails must have an inline fallback');
+assert.match(source, /if \(!preferLocal\) return value;/, 'standalone games must keep hosted URLs by default');
+assert.match(source, /function setGameImageSource/, 'game images must support hosted-first local fallback');
 assert.doesNotMatch(source, /else if \(!getStartupBlockScreen\(\)\)/, 'startup must not bypass the selected screen');
 assert.match(source, /setStartupLoadingScreen\(true\)/, 'the preset must enable its selected startup screen');
 assert.match(launcher, /Unbl0cked-Zone-V2@" \+ _revision/, 'launcher must request an immutable source revision');
