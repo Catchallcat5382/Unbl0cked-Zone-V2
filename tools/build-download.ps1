@@ -24,6 +24,7 @@ $html = @"
   var revision = '$Revision';
   var repo = 'Catchallcat5382/Unbl0cked-Zone-V2';
   var roots = [
+    'https://raw.githubusercontent.com/' + repo + '/cdn/assets/',
     'https://cdn.jsdelivr.net/gh/' + repo + '@cdn/assets/',
     'https://quantil.jsdelivr.net/gh/' + repo + '@cdn/assets/',
     'https://gcore.jsdelivr.net/gh/' + repo + '@cdn/assets/',

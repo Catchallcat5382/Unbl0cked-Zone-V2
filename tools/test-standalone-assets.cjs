@@ -8,6 +8,7 @@ const standalone = fs.readFileSync(path.join(root, 'unblocked zone v2.html'), 'u
 const launcher = fs.readFileSync(path.join(root, 'assets', 'class.html'), 'utf8');
 
 assert.match(standalone, /@cdn\/assets\//, 'downloaded HTML must load the current CDN branch');
+assert.match(standalone, /roots = \[\s*'https:\/\/raw\.githubusercontent\.com\/' \+ repo \+ '\/cdn\/assets\/'/, 'downloaded HTML must try the fresh raw CDN branch first');
 assert.match(standalone, /@' \+ revision \+ '\/assets\//, 'downloaded HTML must have an immutable CDN fallback');
 assert.match(standalone, /injectBase\(html, root\)/, 'downloaded HTML must resolve relative resources against the selected CDN');
 assert.doesNotMatch(standalone, /UZ_LOCAL_ASSETS|new URL\('assets\/', location\.href\)/, 'downloaded HTML must never switch to local game assets');
