@@ -4151,11 +4151,10 @@
       localStorage.setItem('startupLoadingScreen', enabled ? '1' : '0');
     }
     function getStartupBlockScreen() {
-      var v = localStorage.getItem('startupBlockScreen');
-      return v === null ? false : v === '1';
+      return false;
     }
     function setStartupBlockScreen(enabled) {
-      localStorage.setItem('startupBlockScreen', enabled ? '1' : '0');
+      localStorage.removeItem('startupBlockScreen');
     }
 
     window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
@@ -6616,63 +6615,11 @@ var glow = 'rgba(' + r + ',' + g + ',' + b + ',0.5)';
       var sel = document.getElementById('theme-select');
       if (sel) sel.value = theme;
     }
-    var BLOCK_FRAMES = {
-      lightspeed: 'https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@main/assets/lightspeed.html',    //gay67
-      goguardian: 'https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@main/assets/goguardian.html',
-      securly: 'https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@main/assets/securly.html',
-      classlink: 'https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@main/assets/classlink.html',
-      lightspeedclassroom: 'https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@main/assets/lightspeedteach.html'
-    };
-    function loadBlockFromCdn(theme, slot) {
-      var url = BLOCK_FRAMES[theme];
-      if (!url || !slot) return;
-      if (slot.getAttribute('data-src') === url) return;
-      slot.setAttribute('data-src', url);
-      var requestUrl = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now();
-      fetch(requestUrl).then(function (r) { return r.text(); }).then(function (html) {
-        var s = document.getElementById('cdn-block');
-        if (!s) return;
-        var d = new DOMParser().parseFromString(html, 'text/html');
-        for (var i = 0; i < d.head.querySelectorAll('link[rel=stylesheet]').length; i++) {
-          var el = d.head.querySelectorAll('link[rel=stylesheet]')[i];
-          var href = el.getAttribute('href');
-          if (!href) continue;
-          if (!/^https:\/\//i.test(href)) href = 'https:' + href.replace(/^\/\//, '');
-          if (document.querySelector('link[data-cdn="' + href + '"]')) continue;
-          var l = document.createElement('link');
-          l.rel = 'stylesheet';
-          l.href = href;
-          l.setAttribute('data-cdn', href);
-          document.head.appendChild(l);
-        }
-        var css = '';
-        for (var j = 0; j < d.head.getElementsByTagName('style').length; j++) {
-          css += d.head.getElementsByTagName('style')[j].textContent + '\n';
-        }
-        css = css.replace(/:root/g, '#cdn-block')
-                 .replace(/(^|[^-\w])html(?=\s*[,{:])/g, '$1#cdn-block')
-                 .replace(/(^|[^-\w])body(?=\s*[,{:])/g, '$1#cdn-block');
-        s.innerHTML = '<style>' + css + '</style>' + d.body.innerHTML;
-        if (typeof window.loadLightspeedText === 'function') window.loadLightspeedText();
-        var accountName = String(localStorage.getItem('uzLoginEmail') || 'user').trim().split('@')[0] || 'user';
-        var accountNode = s.querySelector('#loading-account-name');
-        if (accountNode) accountNode.textContent = accountName;
-        var systemNode = s.querySelector('.loading-system-msg');
-        if (systemNode && /^You are logged in as\s+/i.test(systemNode.textContent || '')) {
-          systemNode.textContent = 'You are logged in as ' + accountName + ' (IP Address: hidden).';
-        }
-        s.classList.remove('hidden');
-      }).catch(function () {
-        var s = document.getElementById('cdn-block');
-        if (s) s.removeAttribute('data-src');
-      });
-    }
     function setLoadingTheme(theme) {
       lsTheme = theme;
       localStorage.setItem('loadingTheme', theme);
       var screen = document.getElementById('loading-screen');
       if (!screen) return;
-      loadBlockFromCdn(theme, document.getElementById('cdn-block'));
       screen.classList.remove('goguardian-theme', 'securly-theme', 'classlink-theme');
       if (theme === 'goguardian') screen.classList.add('goguardian-theme');
       if (theme === 'securly') screen.classList.add('securly-theme');
@@ -6942,15 +6889,22 @@ var glow = 'rgba(' + r + ',' + g + ',' + b + ',0.5)';
 
     function normalizeg4mes(g) {
       const name = String(g.name || g.title || 'Unknown').trim();
-      const url = String(g.url || g.file || g.html || '').trim();
-      const img = String(g.img || g.image || '').trim();
+      const url = localPackUrl(String(g.url || g.file || g.html || '').trim());
+      const img = localPackUrl(String(g.img || g.image || '').trim());
       const extra = {};
       for (const k in g) { if (!['name','title','url','file','html','img','image'].includes(k)) extra[k] = g[k]; }
       return Object.assign({}, extra, {
         name: name || 'Unknown',
         url: url || '#',
-        img: img || 'https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@latest/assets/img/fallback.png'
+        img: img || localPackUrl('https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@latest/assets/img/fallback.png')
       });
+    }
+
+    function localPackUrl(value) {
+      value = String(value || '').trim();
+      if (!window.UZ_LOCAL_ASSETS || !value) return value;
+      var match = value.match(/\/assets\/(.+)$/i);
+      return match ? new URL(match[1], document.baseURI).href : value;
     }
 
 let DATA = {
@@ -7102,10 +7056,16 @@ let DATA = {
 
     async function loadUBZ() {
       if(DATA.ubz.length) return;
+      var catalogUrls = window.UZ_LOCAL_ASSETS
+        ? [new URL('data.json', document.baseURI).href, toCdnUrl('https://quantil.jsdelivr.net/gh/s0n-1m-cr1n3/sc13nc3/assets/data.json')]
+        : [toCdnUrl('https://quantil.jsdelivr.net/gh/s0n-1m-cr1n3/sc13nc3/assets/data.json')];
       try {
-        const r = await fetch(toCdnUrl('https://quantil.jsdelivr.net/gh/s0n-1m-cr1n3/sc13nc3/assets/data.json'));
-        if (!r.ok) throw new Error('fetch failed');
-        const d = await r.json();
+        var d = null;
+        for (var sourceIndex = 0; sourceIndex < catalogUrls.length; sourceIndex++) {
+          var r = await fetch(catalogUrls[sourceIndex], { cache: 'no-store' });
+          if (r.ok) { d = await r.json(); break; }
+        }
+        if (!d) throw new Error('catalog unavailable');
         DATA.ubz = (Array.isArray(d) ? d : d.games || [])
           .map(g => normalizeg4mes({
             name: g.name || g.title,
