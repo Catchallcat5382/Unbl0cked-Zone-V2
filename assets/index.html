@@ -6902,47 +6902,25 @@ var glow = 'rgba(' + r + ',' + g + ',' + b + ',0.5)';
 
     function normalizeg4mes(g) {
       const name = String(g.name || g.title || 'Unknown').trim();
-      const url = localPackUrl(String(g.url || g.file || g.html || '').trim());
-      const img = localPackUrl(String(g.img || g.image || '').trim());
+      const url = String(g.url || g.file || g.html || '').trim();
+      const img = String(g.img || g.image || '').trim();
       const extra = {};
       for (const k in g) { if (!['name','title','url','file','html','img','image'].includes(k)) extra[k] = g[k]; }
       return Object.assign({}, extra, {
         name: name || 'Unknown',
         url: url || '#',
-        img: img || localPackUrl('https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@latest/assets/img/fallback.png')
+        img: img || 'https://quantil.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@latest/assets/img/fallback.png'
       });
-    }
-
-    function localPackUrl(value) {
-      value = String(value || '').trim();
-      if (!window.UZ_LOCAL_ASSETS || !value) return value;
-      var preferLocal = false;
-      try { preferLocal = localStorage.getItem('uzPreferLocalGameAssets') === '1'; } catch (e) {}
-      if (!preferLocal) return value;
-      return localAssetUrl(value) || value;
-    }
-
-    function localAssetUrl(value) {
-      value = String(value || '').trim();
-      if (!window.UZ_LOCAL_ASSETS || !value) return '';
-      var match = value.match(/\/assets\/(.+)$/i);
-      return match ? new URL(match[1], document.baseURI).href : '';
     }
 
     function setGameImageSource(image, value) {
       if (!image) return;
       var remote = String(value || '').trim();
-      var local = localAssetUrl(remote);
       image.onerror = function() {
-        if (local && image.src !== local) {
-          image.onerror = function() { image.onerror = null; image.src = UZ_INLINE_IMAGE_FALLBACK; };
-          image.src = local;
-          return;
-        }
         image.onerror = null;
         image.src = UZ_INLINE_IMAGE_FALLBACK;
       };
-      image.src = remote || local || UZ_INLINE_IMAGE_FALLBACK;
+      image.src = remote || UZ_INLINE_IMAGE_FALLBACK;
     }
 
     const UZ_INLINE_IMAGE_FALLBACK = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 180'%3E%3Crect width='320' height='180' fill='%23101014'/%3E%3Cpath d='M112 119l31-35 22 24 19-20 34 31H112z' fill='%23373a44'/%3E%3Ccircle cx='196' cy='60' r='13' fill='%23555a68'/%3E%3Crect x='89' y='35' width='142' height='110' rx='8' fill='none' stroke='%23777d8e' stroke-width='5'/%3E%3C/svg%3E";
@@ -6950,9 +6928,6 @@ var glow = 'rgba(' + r + ',' + g + ',' + b + ',0.5)';
 
     function gameCatalogMessage() {
       var status = window.UZ_CATALOG_STATUS || {};
-      if (window.UZ_LOCAL_ASSETS) {
-        return 'The embedded game list is available, but hosted game files could not be reached. The local backup folder is expected at ' + document.baseURI;
-      }
       return 'The game catalog could not be reached from this network.' + (status.error ? ' ' + status.error : '');
     }
 
@@ -6968,19 +6943,7 @@ var glow = 'rgba(' + r + ',' + g + ',' + b + ',0.5)';
       var revision = window.UZ_BUILD_REVISION || 'source';
       if (version) version.textContent = 'Build ' + revision;
       if (!status) return;
-      if (!window.UZ_LOCAL_ASSETS) {
-        status.textContent = 'Hosted copy. Catalog source: ' + ((window.UZ_CATALOG_STATUS && window.UZ_CATALOG_STATUS.source) || 'checking') + '.';
-        return;
-      }
-      var probe = new Image();
-      var target = new URL('img/fallback.png', document.baseURI).href;
-      probe.onload = function() {
-        status.textContent = 'Hosted game loading is active, matching the old loader. The local backup assets folder was also found at ' + document.baseURI;
-      };
-      probe.onerror = function() {
-        status.textContent = 'Hosted game loading is active, matching the old loader. Local backup assets were not found at ' + target;
-      };
-      probe.src = target + (target.indexOf('?') === -1 ? '?' : '&') + 'check=' + Date.now();
+      status.textContent = 'Hosted copy. Catalog source: ' + ((window.UZ_CATALOG_STATUS && window.UZ_CATALOG_STATUS.source) || 'checking') + '.';
     };
     setTimeout(window.runAssetCheck, 0);
 
@@ -7133,9 +7096,7 @@ let DATA = {
 
     async function loadUBZ() {
       if(DATA.ubz.length) return;
-      var catalogUrls = window.UZ_LOCAL_ASSETS
-        ? [new URL('data.json', document.baseURI).href, toCdnUrl('https://quantil.jsdelivr.net/gh/s0n-1m-cr1n3/sc13nc3/assets/data.json')]
-        : [toCdnUrl('https://quantil.jsdelivr.net/gh/s0n-1m-cr1n3/sc13nc3/assets/data.json')];
+      var catalogUrls = [toCdnUrl('https://quantil.jsdelivr.net/gh/s0n-1m-cr1n3/sc13nc3/assets/data.json')];
       try {
         var d = window.UZ_EMBEDDED_CATALOG || null;
         window.UZ_CATALOG_STATUS = { source: d ? 'embedded HTML catalog' : '', attempts: catalogUrls.slice(), error: '' };
