@@ -10,6 +10,8 @@ $utf8 = New-Object System.Text.UTF8Encoding($false)
 $sourcePath = Join-Path $root 'assets\index.html'
 $outputPath = Join-Path $root 'unblocked zone v2.html'
 $html = [IO.File]::ReadAllText($sourcePath, $utf8)
+$catalogJson = [IO.File]::ReadAllText((Join-Path $root 'assets\data.json'), $utf8).Replace('</script', '<\/script')
+$catalogScript = '<script data-inline="assets/data.json">window.UZ_EMBEDDED_CATALOG=' + $catalogJson + ';</script>'
 
 $baseHref = 'https://cdn.jsdelivr.net/gh/Catchallcat5382/Unbl0cked-Zone-V2@cdn/assets/'
 $localAssetBootstrap = @'
@@ -22,7 +24,7 @@ $localAssetBootstrap = @'
     }());
   </script>
 '@
-$head = '<head$1>' + [Environment]::NewLine + ('  <base href="{0}">' -f $baseHref) + [Environment]::NewLine + ("  <script>window.UZ_BUILD_REVISION = '{0}';</script>" -f $Revision) + [Environment]::NewLine + $localAssetBootstrap
+$head = '<head$1>' + [Environment]::NewLine + ('  <base href="{0}">' -f $baseHref) + [Environment]::NewLine + ("  <script>window.UZ_BUILD_REVISION = '{0}';</script>" -f $Revision) + [Environment]::NewLine + $catalogScript + [Environment]::NewLine + $localAssetBootstrap
 $headPattern = [regex]::new('<head([^>]*)>')
 $html = $headPattern.Replace($html, $head, 1)
 
